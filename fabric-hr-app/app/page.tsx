@@ -47,12 +47,20 @@ const fetchData = async () => {
       
       const response = await fetch(`${baseUrl}/api/vacation/balance?email=${email}`);
       
-      if (response.status === 404) {
-        if (email === MASTER_ADMIN) {
-          setIsLoadingData(false);
-          router.replace("/rh");
-          return;
-        }
+if (response.status === 404) {
+  if (email === MASTER_ADMIN) {
+    // Se for Admin e não estiver no banco, a gente "finge" um usuário básico 
+    // só pra ele não travar e poder navegar.
+        setUserData({
+          full_name: "Master Admin",
+          role: "ADMIN",
+          is_hr: true,
+          is_manager: true
+        });
+        setIsLoadingData(false);
+        // NÃO USE router.replace("/rh") AQUI! Deixa ele na Home.
+        return;
+      }
         setUserData(null);
         setIsLoadingData(false);
         return;
