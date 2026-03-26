@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, BarChart3, LogOut, Plus, Pencil, Ban, CheckCircle, X, ShieldCheck, Crown, Bell, Home, ChevronLeft, ChevronRight, FileText, Download, Filter, ShieldAlert, Percent, Wallet, HeartPulse, CalendarDays, Clock, Check, MessageSquare, CloudOff, Cloud, Search, Lock} from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 import { apiFetch } from "@/services/api";
+import email from "next-auth/providers/email";
 
 export default function RHDashboard() {
   const { data: session, status } = useSession();
@@ -354,7 +355,8 @@ const filteredReports = macroVacations.filter((req: any) => {
     try {
       // Pega a URL base do seu .env. Ajuste o caminho '/users/audit/export-csv' conforme a sua rota
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
-      const res = await fetch(`${baseUrl}/users/audit/export-csv`);
+      const res = await fetch(`${baseUrl}/api/users/audit/export-csv`);
+      const notifRes = await fetch(`${baseUrl}/api/notifications?email=${email}&context=rh`);
       
       if (!res.ok) throw new Error("Falha ao gerar o arquivo no servidor");
 
