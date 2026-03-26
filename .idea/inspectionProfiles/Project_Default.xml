@@ -1,0 +1,34 @@
+<component name="InspectionProjectProfileManager">
+  <profile version="1.0">
+    <option name="myName" value="Project Default" />
+    <inspection_tool class="PyPackageRequirementsInspection" enabled="false" level="WARNING" enabled_by_default="false">
+      <option name="ignoredPackages">
+        <list>
+          <option value="certifi" />
+          <option value="cffi" />
+          <option value="charset-normalizer" />
+          <option value="cryptography" />
+          <option value="dotenv" />
+          <option value="greenlet" />
+          <option value="idna" />
+          <option value="numpy" />
+          <option value="pandas" />
+          <option value="pandas-stubs" />
+          <option value="pdfplumber" />
+          <option value="pillow" />
+          <option value="psycopg2" />
+          <option value="psycopg2-binary" />
+          <option value="pycparser" />
+          <option value="pypdfium2" />
+          <option value="python-dateutil" />
+          <option value="python-dotenv" />
+          <option value="pytz" />
+          <option value="requests" />
+          <option value="six" />
+          <option value="tzdata" />
+          <option value="urllib3" />
+        </list>
+      </option>
+    </inspection_tool>
+  </profile>
+</component>

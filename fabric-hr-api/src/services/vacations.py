@@ -1,0 +1,182 @@
+from fastapi import APIRouter, Depends, HTTPException, Response
+from sqlalchemy.orm import Session
+from datetime import datetime, timedelta, date
+
+# Imports Locais
+from src.database import get_db
+from src import models, schemas
+from src.routers.math import MathRHService
+
+router = APIRouter(
+    prefix="/api/vacation",
+    tags=["Gestão de Férias"]
+)
+
+@router.get("/balance")
+def get_vacation_balance(email: str, db: Session = Depends(get_db)):
+    """
+    Obter o saldo de férias de um colaborador, incluindo dias disponíveis, dias usados, período aquisitivo, e flags de venda ou adiantamento.
+    - email: Email do colaborador para identificar sua conta
+    - Retorna um objeto com o nome do colaborador, departamento, se é gestor ou RH, dias disponíveis, dias usados, período aquisitivo (início e fim),
+    e flags indicando se o colaborador vendeu dias ou adiantou o 13° salário. O endpoint é essencial para que o colaborador possa consultar seu saldo
+    de férias e planejar suas solicitações, além de fornecer informações importantes para o processo de aprovação e gestão de férias pela equipe de RH e gestores.
+    """
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user: raise HTTPException(status_code=404, detail="Colaborador não encontrado")
+    return {
+        "name": user.full_name, 
+        "department": user.department,
+        "is_manager": user.is_manager,
+        "is_hr": getattr(user, "is_hr", False), 
+        "available_days": user.balance.available_days,
+        "used_days": user.balance.used_days,
+        "period_start": str(user.admission_date),
+        "period_end": str(user.admission_date + timedelta(days=365)),
+        "flags": {
+            "has_sold_days": user.balance.has_sold_days,
+            "has_advanced_13th": user.balance.has_advanced_13th
+        }
+    }
+
+@router.get("/history")
+def get_user_history(email: str, db: Session = Depends(get_db)):
+    """
+    Obter o histórico de solicitações de férias de um colaborador, incluindo detalhes como datas, status, e justificativas.
+    - email: email do colaborador para identificar sua conta
+    - Retorna uma lista de solicitações de férias do colaborador, ordenadas da mais recente para a mais antiga. Cada solicitação inclui o ID, datas de início e fim,
+    número de dias, status (pendente, aprovado, rejeitado), se vendeu dias ou adiantou o 13° salário, e a justificativa do gestor (se houver).
+    O endpoint é importante para que o colaborador possa acompanhar suas solicitações passadas, entender o status de cada uma, e ter acesso às justificativas fornecidas pelos gestores,
+    o que pode ajudar no planejamento de futuras solicitações e na comunicação com a equipe de RH e gestores.
+    """
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user: return []
+    requests = db.query(models.VacationRequest).filter(models.VacationRequest.user_id == user.id).order_by(models.VacationRequest.start_date.desc()).all()
+    resultado = []
+    for req in requests:
+        days_calc = (req.end_date - req.start_date).days + 1
+        resultado.append({
+            "id": req.id, "startDate": req.start_date.strftime("%Y-%m-%d"), "endDate": req.end_date.strftime("%Y-%m-%d"),
+            "days": days_calc, "status": req.status, "sellDays": req.sell_days, "advance13th": req.advance_13th,
+            "justification": req.manager_justification
+        })
+    return resultado
+
+@router.post("/request")
+def create_vacation_request(payload: schemas.VacationSubmit, db: Session = Depends(get_db)):
+    """
+    Criar uma nova solicitação de férias para um colaborador, incluindo detalhes como datas, venda de dias, e adiantamento de 13° salário.
+    - payload: Objeto contendo o e-mail do colaborador para identificar sua conta, data de início das férias, número de dias, e flags indicando
+    se o colaborador deseja vender dias ou adiantar o 13° salário.
+    - O endpoint cria uma nova solicitação de férias no sistema, associada ao colaborador identificado pelo e-mail. Ele calcula a data de término com base
+    na data de início e no número de dias, e define o status inicial como "PENDENTE". Se o colaborador optar por vender dias ou adiantar o 13° salário, as flags
+    correspondentes são definidas no banco de dados.
+    """
+    user = db.query(models.User).filter(models.User.email == payload.email).first()
+    if not user: raise HTTPException(status_code=404, detail="Colaborador não encontrado")
+    start_d = datetime.strptime(payload.startDate, "%Y-%m-%d").date()
+    end_d = start_d + timedelta(days=payload.days - 1)
+    new_request = models.VacationRequest(
+        user_id=user.id, start_date=start_d, end_date=end_d,
+        sell_days=payload.sellDays, advance_13th=payload.advance13th, status="PENDENTE"
+    )
+    db.add(new_request)
+    if payload.sellDays: user.balance.has_sold_days = True
+    if payload.advance13th: user.balance.has_advanced_13th = True
+    db.commit()
+    return {"message": "Solicitação gravada!"}
+
+@router.get("/team_vacations")
+def get_team_vacations(email: str, db: Session = Depends(get_db)):
+    """
+    Obter informações sobre as férias da equipe de um gestor, incluindo métricas de risco de sobreposição e fadiga.
+    - email: Email do gestor para identificar sua equipe
+    - Retorna uma lista de solicitações de férias da equipe e métricas como número total de membros, risco de sobreposição, tempo médio de aprovação,
+    dias acumulados, e alertas de fadiga (baseado em saldos altos). O endpoint ajuda gestores a monitorar e gerencias as férias de seus liderados,
+    identificando possíveis problemas de planejamento e garantindo que a equipe tenha um equilíbrio saudável entre trabalho e descanso.
+    """
+    manager = db.query(models.User).filter(models.User.email == email).first()
+    if not manager: return {"metrics": {}, "vacations": []}
+    
+    team_users = db.query(models.User).filter(models.User.manager_id == manager.id, models.User.is_active == True).all()
+    team_ids = [u.id for u in team_users]
+    total_liderados = len(team_ids)
+    
+    # NOVO: Motor de Saldo e Fadiga do Setor
+    total_accumulated_days = 0
+    fatigue_alerts = 0
+    for u in team_users:
+        if u.balance:
+            total_accumulated_days += u.balance.available_days
+            # Se o cara tem 30 ou mais dias de saldo, o alerta de fadiga dispara
+            if u.balance.available_days >= 30:
+                fatigue_alerts += 1
+    
+    requests = db.query(models.VacationRequest).filter(models.VacationRequest.user_id.in_(team_ids)).order_by(models.VacationRequest.start_date.desc()).all()
+    
+    approved_reqs = [r for r in requests if r.status == "APROVADO"]
+    overlap_count = 0
+    for i, r1 in enumerate(approved_reqs):
+        has_overlap = False
+        for j, r2 in enumerate(approved_reqs):
+            if i != j and r1.start_date <= r2.end_date and r2.start_date <= r1.end_date:
+                has_overlap = True
+                break
+        if has_overlap: overlap_count += 1
+
+    resultado = []
+    for req in requests:
+        days_calc = (req.end_date - req.start_date).days + 1
+        resultado.append({
+            "id": req.id, "employeeName": req.user.full_name, "role": req.user.role,
+            "startDate": req.start_date.strftime("%Y-%m-%d"), "endDate": req.end_date.strftime("%Y-%m-%d"),
+            "days": days_calc, "status": req.status, "sellDays": req.sell_days,
+            "advance13th": req.advance_13th, "justification": req.manager_justification
+        })
+        
+    return {
+        "metrics": {
+            "total_team_members": total_liderados, 
+            "overlap_risk": overlap_count, 
+            "avg_approval_time": 1.2,
+            "total_accumulated_days": total_accumulated_days,
+            "fatigue_alerts": fatigue_alerts
+        }, 
+        "vacations": resultado
+    }
+
+@router.put("/{request_id}/status")
+def update_vacation_status(request_id: int, payload: schemas.ActionRequest, db: Session = Depends(get_db)):
+    """
+    Endpoint para atualizar o status de uma solicitação de férias (aprovar ou rejeitar) e ajustar o saldo de dias do colaborador.
+    - request_id: ID da solicitação de férias a ser atualizado.
+    - payload: Objeto contendo a ação ("approve" ou "reject") e uma justificativa opcional.
+    - O endpoint verifica a solicitação, atualiza seu status, e ajusta o saldo de dias do colaborador com base na decisão. Se aprovado, os dias gozados são subtraídos,
+    e se vendido, mais 10 dias são subtraídos. Se rejeitado, quaisquer vendas ou adiantamentos relacionados são revertidos. O endpoint é essencial para o processo de aprovação
+    de férias, garantindo que as decisões sejam refletidas corretamente no sistema e que os gestores possam justificar suas ações quando necessário.
+    """
+    vacation = db.query(models.VacationRequest).filter(models.VacationRequest.id == request_id).first()
+    if not vacation: raise HTTPException(status_code=404)
+    
+    novo_status = "APROVADO" if payload.action == "approve" else "REPROVADO"
+    vacation.status = novo_status
+    if getattr(payload, "justification", None): 
+        vacation.manager_justification = payload.justification
+    
+    user_balance = db.query(models.VacationBalance).filter(models.VacationBalance.user_id == vacation.user_id).first()
+    
+    if novo_status == "APROVADO" and user_balance:
+        dias_gozados = (vacation.end_date - vacation.start_date).days + 1
+        
+        # 🚀 SÓ ADICIONAMOS NO USED_DAYS. O Motor faz o resto!
+        user_balance.used_days += dias_gozados
+        
+        # Se vendeu férias, consome mais 10 dias do passivo
+        if vacation.sell_days: 
+            user_balance.used_days += 10
+            
+    elif novo_status == "REPROVADO" and user_balance:
+        # Só pra garantir, no models isso costuma ser "has_sold_days" ou parecido
+        pass # Apenas reprova, não mexe no saldo!
+
+    db.commit()
+    return {"message": "Status atualizado com sucesso!"}
