@@ -30,47 +30,52 @@ export default function Dashboard() {
     isOpen: false, title: "", message: "", onConfirm: () => {}
   });
 
-  const fetchData = async () => {
-    if (status === "unauthenticated") {
-      setIsLoadingData(false);
-      return;
-    }
+  
 
-    if (status === "authenticated" && session?.user?.email) {
-      try {
-        const email = session.user.email;
-        const response = await fetch(`http://127.0.0.1:8000/api/vacation/balance?email=${email}`);
-        
-        if (response.status === 404) {
-          if (email === MASTER_ADMIN) {
-            router.replace("/rh");
-            return;
-          }
-          setUserData(null);
-          setIsLoadingData(false);
+const fetchData = async () => {
+  if (status === "unauthenticated") {
+    setIsLoadingData(false);
+    return;
+  }
+
+  if (status === "authenticated" && session?.user?.email) {
+    try {
+      const email = session.user.email;
+      
+      // 🚀 JUTSU DINÂMICO: Pega a URL da Vercel (Produção) ou do .env local (Dev)
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+      
+      const response = await fetch(`${baseUrl}/api/vacation/balance?email=${email}`);
+      
+      if (response.status === 404) {
+        if (email === MASTER_ADMIN) {
+          router.replace("/rh");
           return;
         }
-
-        if (!response.ok) throw new Error("Erro na API Python");
-
-        const balanceData = await response.json();
-
-        // 🚀 ROTEAMENTO S-RANK: Ninguém é expulso daqui! Todos ficam e ganham botões extras.
-        setUserData(balanceData);
-        
-        const hRes = await fetch(`http://127.0.0.1:8000/api/vacation/history?email=${email}`);
-        if (hRes.ok) setHistory(await hRes.json());
-        
-      } catch (err: any) {
-        console.error("Erro de conexão:", err);
-        if (err.message === "Failed to fetch" || err.message.includes("NetworkError")) {
-          setIsBackendOffline(true);
-        }
-      } finally {
+        setUserData(null);
         setIsLoadingData(false);
+        return;
       }
+
+      if (!response.ok) throw new Error("Erro na API Python");
+
+      const balanceData = await response.json();
+      setUserData(balanceData);
+      
+      // 🚀 Segunda chamada usando a mesma Base URL
+      const hRes = await fetch(`${baseUrl}/api/vacation/history?email=${email}`);
+      if (hRes.ok) setHistory(await hRes.json());
+      
+    } catch (err: any) {
+      console.error("Erro de conexão:", err);
+      if (err.message === "Failed to fetch" || err.message.includes("NetworkError")) {
+        setIsBackendOffline(true);
+      }
+    } finally {
+      setIsLoadingData(false);
     }
-  };
+  }
+};
 
   useEffect(() => {
     fetchData();
