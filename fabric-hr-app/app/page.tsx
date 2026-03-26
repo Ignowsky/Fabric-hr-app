@@ -30,7 +30,7 @@ export default function Dashboard() {
     isOpen: false, title: "", message: "", onConfirm: () => {}
   });
 
-  
+
 
 const fetchData = async () => {
   if (status === "unauthenticated") {
@@ -42,7 +42,7 @@ const fetchData = async () => {
     try {
       const email = session.user.email;
       
-      // 🚀 JUTSU DINÂMICO: Pega a URL da Vercel (Produção) ou do .env local (Dev)
+      // Pega a URL da Vercel (Produção) ou do .env local (Dev)
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
       
       const response = await fetch(`${baseUrl}/api/vacation/balance?email=${email}`);
@@ -89,9 +89,10 @@ const fetchData = async () => {
     setIsSubmitting(true);
     const toastId = toast.loading("Enviando solicitação para o gestor...");
     const payload = { email: session?.user?.email, startDate, days: vacationDays, sellDays, advance13th };
-    
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/vacation/request", {
+      
+      const res = await fetch(`${baseUrl}/api/vacation/request`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error("Falha ao gravar no banco");

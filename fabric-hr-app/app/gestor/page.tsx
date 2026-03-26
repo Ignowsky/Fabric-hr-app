@@ -63,11 +63,12 @@ export default function ManagerDashboard() {
     if (status !== "authenticated" || !session?.user?.email) return;
     try {
       const email = session.user.email;
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
       
       const [res, notifRes, userRes] = await Promise.all([
-        fetch(`http://127.0.0.1:8000/api/vacation/team_vacations?email=${session?.user?.email}`),
-        fetch(`http://127.0.0.1:8000/api/notifications?email=${email}&context=gestor`),
-        fetch(`http://127.0.0.1:8000/api/vacation/balance?email=${email}`)
+        fetch(`${baseUrl}/api/vacation/team_vacations?email=${session?.user?.email}`),
+        fetch(`${baseUrl}/api/notifications?email=${email}&context=gestor`),
+        fetch(`${baseUrl}/api/vacation/balance?email=${email}`)
       ]);
 
       if (!res.ok) throw new Error("Erro na API de Férias");
@@ -131,8 +132,9 @@ export default function ManagerDashboard() {
   };
 
   const processAction = async (id: number, action: "approve" | "reject", justification: string) => {
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/vacation/${id}/status`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, justification }) });
+      const res = await fetch(`${baseUrl}/api/vacation/${id}/status`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, justification }) });
       if (!res.ok) throw new Error("Falha ao atualizar");
       toast.success(action === "approve" ? "Férias aprovadas com sucesso!" : "Solicitação reprovada.");
       fetchTeamData(); 
@@ -205,7 +207,8 @@ const handleExportCSV = () => {
         const csvString = headers.concat(rows).join("\n");
 
         try {
-          const res = await fetch("http://127.0.0.1:8000/api/gestor/dispatch", {
+          const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+          const res = await fetch(`${baseUrl}/api/gestor/dispatch`, {
             method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ email: session?.user?.email, csv_data: csvString })
           });
