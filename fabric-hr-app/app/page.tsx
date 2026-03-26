@@ -49,6 +49,7 @@ const fetchData = async () => {
       
       if (response.status === 404) {
         if (email === MASTER_ADMIN) {
+          setIsLoadingData(false);
           router.replace("/rh");
           return;
         }
