@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, BarChart3, LogOut, Plus, Pencil, Ban, CheckCircle, X, ShieldCheck, Crown, Bell, Home, ChevronLeft, ChevronRight, FileText, Download, Filter, ShieldAlert, Percent, Wallet, HeartPulse, CalendarDays, Clock, Check, MessageSquare, CloudOff, Cloud, Search, Lock} from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 import { apiFetch } from "@/services/api";
-import email from "next-auth/providers/email";
+
 
 export default function RHDashboard() {
   const { data: session, status } = useSession();
@@ -48,7 +48,7 @@ export default function RHDashboard() {
   const [crudPage, setCrudPage] = useState(1);
 
   const [currentDate, setCurrentDate] = useState(new Date());
-
+  const [isLoading, setIsLoading] = useState(true);
   const [formData, setFormData] = useState({
     full_name: "", email: "", role: "", department: "", 
     admission_date: "", is_manager: false, is_hr: false, manager_id: ""
@@ -71,27 +71,34 @@ export default function RHDashboard() {
     }
   }, [session?.user?.email]);
 
-  const fetchData = async () => {
-    try {
-      const email = session?.user?.email || "";
-      
-      // 🚀 Olha como fica limpo! O apiFetch já devolve os DADOS (JSON), e não a "Response"
-      const [usersData, metricsData, notifData] = await Promise.all([
-        apiFetch("/users"), 
-        apiFetch("/rh/metrics"),
-        email ? apiFetch(`/notifications?email=${email}&context=rh`) : Promise.resolve(null)
-      ]);
-      
-      // Como já é o JSON mastigado, é só jogar direto no state!
-      if (usersData) setUsers(usersData);
-      if (metricsData) setMetrics(metricsData);
-      if (notifData) setNotifications(notifData);
-      
-    } catch (err) {
-      // Se o Python reclamar ou der 404, o apiFetch joga o erro direto pra cá
-      console.error("🚨 Erro S-Rank ao buscar dados do RH:", err);
-    }
-  };
+    const fetchData = async () => {
+      // 1. Garante que o loading comece (caso não tenha começado)
+      setIsLoading(true); 
+
+      try {
+        const email = session?.user?.email || "";
+        
+        // 🚀 CORREÇÃO DAS ROTAS: Adicionando o /api que o Render exige
+        const [usersData, metricsData, notifData] = await Promise.all([
+          apiFetch("/api/users"), 
+          apiFetch("/api/rh/metrics"),
+          email ? apiFetch(`/api/notifications?email=${email}&context=rh`) : Promise.resolve(null)
+        ]);
+        
+        // Se chegou aqui, os dados são o JSON pronto
+        if (usersData) setUsers(usersData);
+        if (metricsData) setMetrics(metricsData);
+        if (notifData) setNotifications(notifData);
+        
+      } catch (err) {
+        console.error("🚨 Erro S-Rank ao buscar dados do RH:", err);
+        // Aqui você pode setar um erro pra mostrar na tela se quiser
+      } finally {
+        // 🔑 O SEGREDO DO SUCESSO: O finally roda SEMPRE. 
+        // Independente de dar certo ou 404, a tela vai destravar agora!
+        setIsLoading(false);
+      }
+    };
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/");
