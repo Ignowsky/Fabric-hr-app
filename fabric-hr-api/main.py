@@ -15,19 +15,25 @@ from src.database import engine, get_db
 from src.services import users, vacations, rh
 
 
-app = FastAPI(title="FabricHR Enterprise API")
+app = FastAPI()
 
-# Cria as tabelas no banco de dados se elas não existirem
-models.Base.metadata.create_all(bind=engine)
+# 🚀 A Lista VIP (Onde o seu Front-end mora)
+origins = [
+    "http://localhost:3000", # Mantém pro seu PC continuar funcionando
+    "https://fabric-hr-app.vercel.app" # URL exata do seu front na Vercel (sem a / no final!)
+]
 
+# Configurando o Leão de Chácara (Middleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["*"], # Libera GET, POST, PUT, DELETE
     allow_headers=["*"],
 )
 
+# Cria as tabelas no banco de dados se elas não existirem
+models.Base.metadata.create_all(bind=engine)
 
 # ---------------------------------------------------------
 # ROTAS DO RH E CRUD DE USUÁRIOS
