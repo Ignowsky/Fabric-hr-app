@@ -351,32 +351,47 @@ const filteredReports = macroVacations.filter((req: any) => {
   };
   
   const handleExportAudit = async () => {
-    const toastId = toast.loading("Gerando relatório de auditoria...");
-    try {
-      // Pega a URL base do seu .env. Ajuste o caminho '/users/audit/export-csv' conforme a sua rota
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
-      const res = await fetch(`${baseUrl}/api/users/audit/export-csv`);
-      const notifRes = await fetch(`${baseUrl}/api/notifications?email=${email}&context=rh`);
-      
-      if (!res.ok) throw new Error("Falha ao gerar o arquivo no servidor");
+      const toastId = toast.loading("Gerando relatório de auditoria...");
+      const email = session?.user?.email;
 
-      // 🚀 O JUTSU DO DOWNLOAD: Pega o arquivo cru (Blob) e gera uma URL local
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      
-      // Cria um link <a> invisível, clica nele e joga fora
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `Auditoria_Microsoft_${new Date().toISOString().split('T')[0]}.csv`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      
-      toast.success("CSV S-Rank baixado com sucesso!", { id: toastId });
-    } catch (err: any) {
-      toast.error(`Erro ao exportar: ${err.message}`, { id: toastId });
-    }
-  };
+      try {
+        // 🚀 PADRONIZAÇÃO: BaseUrl limpa (sem /api no final)
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+        
+        // Chamada da Auditoria (Adicionando /api explicitamente no caminho)
+        const res = await fetch(`${baseUrl}/api/users/audit/export-csv`);
+        
+        if (!res.ok) throw new Error(`Falha no servidor: ${res.status}`);
+
+        // 🚀 Chamada de Notificações (Sincronizada com o mesmo padrão)
+        if (email) {
+          await fetch(`${baseUrl}/api/notifications?email=${email}&context=rh`, {
+            method: "GET"
+          });
+        }
+
+        // 🥷 O JUTSU DO DOWNLOAD (Mantendo sua lógica original de Blob)
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `Auditoria_Microsoft_${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url); // Limpa a memória
+        
+        toast.success("CSV S-Rank baixado com sucesso!", { id: toastId });
+
+      } catch (err: any) {
+        console.error("🚨 Erro na exportação:", err);
+        toast.error(`Erro ao exportar: ${err.message}`, { id: toastId });
+      } finally {
+        // Garante que o loading do toast feche mesmo se der erro
+        toast.dismiss(toastId);
+      }
+    };
 
   const getDaysInMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
   const getFirstDayOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1).getDay();
