@@ -77,7 +77,3 @@ class EntraAuditLog(Base):
     performed_by = Column(String(150))  # email ou nome do executor
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
     
-
-class DispatchPayload(Base):
-    email: str
-    csv_data: str

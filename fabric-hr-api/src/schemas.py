@@ -45,3 +45,7 @@ class DispatchRequest(BaseModel):
 
 class EntraToggleRequest(BaseModel):
     enable: bool
+
+class DispatchPayload(BaseModel):
+    email: str
+    csv_data: str
