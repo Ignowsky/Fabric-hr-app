@@ -87,4 +87,4 @@ scheduler.add_job(
     id='patrulha_entra_id', 
     next_run_time=datetime.now() + timedelta(seconds=10)
 )
-# scheduler.start() # <-- DEIXA COMENTADO SE O MAIN.PY JÁ TIVER CHAMANDO
+scheduler.start() # <-- DEIXA COMENTADO SE O MAIN.PY JÁ TIVER CHAMANDO
