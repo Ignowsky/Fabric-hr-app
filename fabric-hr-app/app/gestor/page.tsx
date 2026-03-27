@@ -61,58 +61,66 @@ export default function ManagerDashboard() {
   }, [session?.user?.email]);
 
 
-  const fetchTeamData = async () => {
-      // 1. Se o cara não tá logado, expulsa pra Home e PARA o loading.
-      if (status === "unauthenticated") {
-        setIsLoading(false); // 🚨 Sem isso, a tela trava pra sempre!
-        router.push("/");
-        return;
-      }
+    const fetchTeamData = async () => {
+        // 1. Se o cara não tá logado, expulsa pra Home e PARA o loading.
+        if (status === "unauthenticated") {
+          setIsLoading(false); // 🚨 Sem isso, a tela trava pra sempre!
+          router.push("/");
+          return;
+        }
 
-      // 2. Se a sessão ainda tá pensando, a gente só espera. 
-      // O useEffect vai rodar essa função de novo sozinho quando logar.
-      if (status !== "authenticated" || !session?.user?.email) return;
+        // 2. Se a sessão ainda tá pensando, a gente só espera. 
+        // O useEffect vai rodar essa função de novo sozinho quando logar.
+        if (status !== "authenticated" || !session?.user?.email) return;
 
-      // 3. O usuário tá logado! Começa a busca.
-      setIsLoading(true);
+        // 3. O usuário tá logado! Começa a busca.
+        setIsLoading(true);
 
-      try {
-        const email = session.user.email;
-        
+        try {
+          const email = session.user.email;
+          
 
-          const [teamData, notifData, userData] = await Promise.all([
-            apiFetch(`/vacation/team_vacations?email=${email}`).catch(err => {
-              console.warn("Aviso: Falha ao buscar time", err);
-              return null;
-            }), 
-            apiFetch(`/notifications?email=${email}&context=gestor`).catch(() => []),
-            apiFetch(`/vacation/balance?email=${email}`).catch(err => {
-              console.warn("Aviso: Falha ao buscar saldo/usuário", err);
-              return null;
-            })
-          ]);
+            const [teamData, notifData, userData] = await Promise.all([
+              apiFetch(`/vacation/team_vacations?email=${email}`).catch(err => {
+                console.warn("Aviso: Falha ao buscar time", err);
+                return null;
+              }), 
+              apiFetch(`/notifications?email=${email}&context=gestor`).catch(() => []),
+              apiFetch(`/vacation/balance?email=${email}`).catch(err => {
+                console.warn("Aviso: Falha ao buscar saldo/usuário", err);
+                return null;
+              })
+            ]);
 
-          // Só alimenta os estados se a API devolver os dados corretos
-          if (teamData && teamData.vacations) {
-            setTeamVacations(teamData.vacations);
-            if (teamData.metrics) setTeamMetrics((prev: any) => ({...prev, ...teamData.metrics}));
-          } else {
-            setTeamVacations([]); // Previne que a tabela quebre se for nulo
-          }
+            // Só alimenta os estados se a API devolver os dados corretos
+            if (teamData && teamData.vacations) {
+              setTeamVacations(teamData.vacations);
+              if (teamData.metrics) setTeamMetrics((prev: any) => ({...prev, ...teamData.metrics}));
+            } else {
+              setTeamVacations([]); // Previne que a tabela quebre se for nulo
+            }
 
-          if (notifData) setNotifications(notifData);
+            if (notifData) setNotifications(notifData);
 
-          // 🚨 Aqui é o pulo do gato: Se o userData falhar, a gente injeta um "fake" 
-          // com o e-mail da sessão só pra tela destravar e não ficar no "Carregando..."
-          if (userData) {
-            setCurrentUser(userData);
-          } else {
-            setCurrentUser({ email: email, name: "Erro ao carregar dados", role: "Gestor" });
-          }
+            // 🚨 Aqui é o pulo do gato: Se o userData falhar, a gente injeta um "fake" 
+            // com o e-mail da sessão só pra tela destravar e não ficar no "Carregando..."
+            if (userData) {
+              setCurrentUser(userData);
+            } else {
+              setCurrentUser({ email: email, name: "Erro ao carregar dados", role: "Gestor" });
+            }
+        } catch (error) {
+          console.error("Erro ao carregar dados do time:", error);
+          setTeamVacations([]);
+          setCurrentUser({ email: session?.user?.email || "", name: "Erro ao carregar dados", role: "Gestor" });
+        } finally {
+          setIsLoading(false);
+        }
+  };
 
-            useEffect(() => {
-              fetchTeamData();
-            }, [status, session]);
+  useEffect(() => {
+    fetchTeamData();
+  }, [status, session]);
 
   // ==========================================
   // 🚀 LÓGICA DE NOTIFICAÇÕES (LEITURA E CACHE)
@@ -269,7 +277,6 @@ const handleExportCSV = () => {
   if (status === "loading" || status === "unauthenticated" || isLoading) {
     return <div className="flex h-screen items-center justify-center bg-[#FBFBFD]"><p className="animate-pulse">Carregando painel do Gestor...</p></div>;
   }
-
   return (
     <main className="min-h-screen bg-[#FBFBFD] p-4 md:p-8 relative">
       {/* CABEÇALHO S-RANK UNIFICADO */}
