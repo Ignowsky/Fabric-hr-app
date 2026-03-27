@@ -1,5 +1,5 @@
 "use client";
-  // atualização
+  // atualização 2024-06: Refatoração completa do painel do Gestor, unificando o design com o RH, adicionando indicadores de analytics, um calendário visual e uma central de notificações com cache local para leitura. O objetivo é entregar uma experiência mais fluida, informativa e alinhada com as necessidades de liderança.
 import { useState, useEffect } from "react";
 import { useSession, signIn, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation"; 
@@ -47,8 +47,10 @@ export default function ManagerDashboard() {
   const [readAlerts, setReadAlerts] = useState<string[]>([]);
 
   useEffect(() => {
-    if (status === "unauthenticated") signIn("azure-ad");
-  }, [status]);
+    if (status === "unauthenticated") {
+      router.push("/"); // Chuta o cara pro Login
+    }
+  }, [status, router]);
 
   //  NOVO: RECUPERAR CACHE DO LOCALSTORAGE
   useEffect(() => {
@@ -274,8 +276,8 @@ const handleExportCSV = () => {
     });
   };
 
-  if (status === "loading" || status === "unauthenticated" || isLoading) {
-    return <div className="flex h-screen items-center justify-center bg-[#FBFBFD]"><p className="animate-pulse">Carregando painel do Gestor...</p></div>;
+  if (status === "loading" || isLoading) {
+      return <div className="flex h-screen items-center justify-center bg-[#FBFBFD]"><p className="animate-pulse">Carregando painel do Gestor...</p></div>;
   }
   return (
     <main className="min-h-screen bg-[#FBFBFD] p-4 md:p-8 relative">
