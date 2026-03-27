@@ -22,22 +22,48 @@ def get_vacation_balance(email: str, db: Session = Depends(get_db)):
     de férias e planejar suas solicitações, além de fornecer informações importantes para o processo de aprovação e gestão de férias pela equipe de RH e gestores.
     """
     user = db.query(models.User).filter(models.User.email == email).first()
-    if not user: raise HTTPException(status_code=404, detail="Colaborador não encontrado")
+    if not user: 
+        raise HTTPException(status_code=404, detail="Colaborador não encontrado")
+
+    # 1. PEGA A DATA ATUAL
+    today = date.today()
+    admission = user.admission_date
+
+    # 2. CÁLCULO DINÂMICO DE ANOS COMPLETOS (PERÍODOS AQUISITIVOS)
+    # Calculamos quantos anos se passaram desde a admissão
+    years_of_service = today.year - admission.year - ((today.month, today.day) < (admission.month, admission.day))
+    
+    # Total que ele deveria ter ganho até hoje (30 dias por ano completo)
+    total_acquired = max(0, years_of_service * 30)
+
+    # 3. TRATANDO O SALDO (BALANCE)
+    # Se o balance existir, pegamos os dias usados de lá. Se não, assumimos 0.
+    used_days = user.balance.used_days if user.balance else 0
+    
+    # 🚨 O CÁLCULO REAL:
+    available_days = total_acquired - used_days
+
+    # 4. DETERMINANDO O PERÍODO AQUISITIVO ATUAL
+    # Início: Data de admissão + anos completos
+    current_period_start = admission.replace(year=admission.year + years_of_service)
+    # Fim: Início do período + 1 ano
+    current_period_end = current_period_start.replace(year=current_period_start.year + 1)
+
     return {
         "name": user.full_name, 
         "department": user.department,
         "is_manager": user.is_manager,
         "is_hr": getattr(user, "is_hr", False), 
-        "available_days": user.balance.available_days,
-        "used_days": user.balance.used_days,
-        "period_start": str(user.admission_date),
-        "period_end": str(user.admission_date + timedelta(days=365)),
+        "available_days": available_days, # Calculado na hora!
+        "used_days": used_days,
+        "period_start": str(current_period_start),
+        "period_end": str(current_period_end),
         "flags": {
-            "has_sold_days": user.balance.has_sold_days,
-            "has_advanced_13th": user.balance.has_advanced_13th
+            "has_sold_days": user.balance.has_sold_days if user.balance else False,
+            "has_advanced_13th": user.balance.has_advanced_13th if user.balance else False
         }
     }
-
+    
 @router.get("/history")
 def get_user_history(email: str, db: Session = Depends(get_db)):
     """
