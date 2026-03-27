@@ -77,7 +77,7 @@ class EntraAuditLog(Base):
     performed_by = Column(String(150))  # email ou nome do executor
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
     
-# 1. O Contrato do Payload (O que o Next.js envia)
-class DispatchPayload(BaseModel):
+
+class DispatchPayload(Base):
     email: str
     csv_data: str
