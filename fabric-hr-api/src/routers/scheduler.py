@@ -35,8 +35,8 @@ def robo_bloqueio_ferias_continuo():
             user = ferias.user
             
             if not user.is_entra_blocked:
-                # O cara tá na praia mas a conta tá ativa. CORTA!
-                sucesso = entra_service.auth_provider.update_account_status(user.email, False)
+                # ⚔️ O CORTE S-RANK CORRIGIDO
+                sucesso = robo_ms.update_entra_id_account(user.email, False)
                 
                 if sucesso:
                     user.is_entra_blocked = True
@@ -57,8 +57,8 @@ def robo_bloqueio_ferias_continuo():
         # 🚨 LIBERA QUEM TÁ BLOQUEADO MAS NÃO TÁ MAIS DE FÉRIAS
         for user in usuarios_bloqueados:
             if user.id not in usuarios_em_ferias_ids:
-                # Tá com badge de bloqueado, mas a data de férias já passou. LIBERA!
-                sucesso = entra_service.auth_provider.update_account_status(user.email, True)
+                # ⚔️ O DESBLOQUEIO S-RANK CORRIGIDO
+                sucesso = robo_ms.update_entra_id_account(user.email, True)
                 
                 if sucesso:
                     user.is_entra_blocked = False
