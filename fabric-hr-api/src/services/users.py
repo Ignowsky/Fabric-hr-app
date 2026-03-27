@@ -52,19 +52,22 @@ def get_all_users(db: Session = Depends(get_db)):
             mgr = db.query(models.User).filter(models.User.id == u.manager_id).first()
             if mgr: manager_name = mgr.full_name
             
-        # 🚀 A FONTE DA VERDADE (Cálculo Dinâmico)
-        # 1. Soma todos os dias de férias já aprovados na tabela VacationRequest
-        dias_solicitados = db.query(func.sum(models.VacationRequest.days)).filter(
+        # 🚀 A FONTE DA VERDADE (Cálculo Dinâmico Corrigido)
+        # 1. Puxa todas as férias aprovadas desse colaborador
+        ferias_aprovadas = db.query(models.VacationRequest).filter(
             models.VacationRequest.user_id == u.id,
             models.VacationRequest.status == "APROVADO"
-        ).scalar() or 0
+        ).all()
 
-        # 2. Verifica se houve venda de férias (cada venda consome 10 dias do saldo)
-        vendas = db.query(func.count(models.VacationRequest.id)).filter(
-            models.VacationRequest.user_id == u.id,
-            models.VacationRequest.status == "APROVADO",
-            models.VacationRequest.sell_days == True
-        ).scalar() or 0
+        # 2. Faz o cálculo de dias e vendas no Python
+        dias_solicitados = 0
+        vendas = 0
+        
+        for req in ferias_aprovadas:
+            # (Data Fim - Data Início) + 1 dia inclusivo
+            dias_solicitados += (req.end_date - req.start_date).days + 1
+            if getattr(req, "sell_days", False):
+                vendas += 1
 
         dias_usados_reais = dias_solicitados + (vendas * 10)
 
