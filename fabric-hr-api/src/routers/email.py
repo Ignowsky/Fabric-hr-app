@@ -91,6 +91,31 @@ class EmailService:
         app = msal.ConfidentialClientApplication(self.CLIENT_ID, authority=authority, client_credential=self.CLIENT_SECRET)
         result = app.acquire_token_for_client(scopes=["https://graph.microsoft.com/.default"])
         return result.get("access_token")
+    
+    
+    def update_entra_id_account(self, email: str, enable: bool):
+        token = self.get_graph_token()
+        if not token: 
+            return False
+
+        url = f"https://graph.microsoft.com/v1.0/users/{email}"
+        headers = {
+            "Authorization": f"Bearer {token}", 
+            "Content-Type": "application/json"
+        }
+        payload = {"accountEnabled": enable}
+        
+        try:
+            response = requests.patch(url, headers=headers, json=payload)
+            if response.status_code in (200, 204):
+                print(f"✅ [ENTRA ID] Conta {email} {'ATIVADA' if enable else 'BLOQUEADA'}!")
+                return True
+            else:
+                print(f"❌ [ENTRA ID] Erro ({response.status_code}): {response.text}")
+                return False
+        except Exception as e:
+            print(f"❌ [ENTRA ID] Falha de conexão: {e}")
+            return False
 
 # ---------------------------------------------------------
 # 2. O GUICHÊ DE ATENDIMENTO (Onde o Next.js vai bater)
