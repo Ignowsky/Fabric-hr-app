@@ -210,21 +210,34 @@ def update_vacation_status(request_id: int, payload: schemas.ActionRequest, db: 
     if getattr(payload, "justification", None): 
         vacation.manager_justification = payload.justification
     
-    user_balance = db.query(models.VacationBalance).filter(models.VacationBalance.user_id == vacation.user_id).first()
-    
-    if novo_status == "APROVADO" and user_balance:
-        dias_gozados = (vacation.end_date - vacation.start_date).days + 1
-        
-        # 🚀 SÓ ADICIONAMOS NO USED_DAYS. O Motor faz o resto!
-        user_balance.used_days += dias_gozados
-        
-        # Se vendeu férias, consome mais 10 dias do passivo
-        if vacation.sell_days: 
-            user_balance.used_days += 10
+    # ... (Seu código original que lida com o user_balance) ...
+
+    # ==========================================================
+    # 🚀 O GATILHO S-RANK (BLOQUEIO IMEDIATO NA APROVAÇÃO)
+    # ==========================================================
+    if novo_status == "APROVADO":
+        hoje = date.today()
+        # O OLHO DO SHARINGAN: Essas férias aprovadas já estão rolando HOJE?
+        if vacation.start_date <= hoje <= vacation.end_date:
+            user = vacation.user
             
-    elif novo_status == "REPROVADO" and user_balance:
-        # Só pra garantir, no models isso costuma ser "has_sold_days" ou parecido
-        pass # Apenas reprova, não mexe no saldo!
+            # Se o cara ainda não tá bloqueado, a gente usa a sua própria estrutura pra cortar!
+            if not getattr(user, "is_entra_blocked", False):
+                try:
+                    # Monta o seu payload fake simulando o clique no botão
+                    toggle_payload = schemas.EntraToggleRequest(enable=False)
+                    sucesso = entra_service.toggle_entra_status(user_id=user.id, payload=toggle_payload, db=db)
+                    
+                    if sucesso:
+                        user.is_entra_blocked = True
+                        db.add(models.EntraAuditLog(
+                            target_user_id=user.id, 
+                            action="BLOQUEIO AUTOMÁTICO (EVENTO DE APROVAÇÃO)", 
+                            performed_by="Automação do Sistema"
+                        ))
+                except Exception as e:
+                    print(f"🚨 [API] Erro ao bloquear na aprovação: {e}")
+    # ==========================================================
 
     db.commit()
     return {"message": "Status atualizado com sucesso!"}

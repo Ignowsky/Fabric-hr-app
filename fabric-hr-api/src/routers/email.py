@@ -3,7 +3,7 @@ import requests
 import msal
 import base64
 from dotenv import load_dotenv
-
+from datetime import date
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -116,6 +116,51 @@ class EmailService:
         except Exception as e:
             print(f"❌ [ENTRA ID] Falha de conexão: {e}")
             return False
+        
+    def sincronizar_bloqueios_ferias(self, db: Session):
+
+
+        hoje = date.today()
+        print(f"🕵️‍♂️ [ROBÔ MS] Iniciando varredura de férias para o dia {hoje}...")
+
+        # Pega todos os usuários ativos no sistema
+        users = db.query(models.User).filter(models.User.is_active == True).all()
+
+        for user in users:
+            # 1. Verifica se tem alguma férias caindo no dia de HOJE
+            em_ferias_agora = False
+            ferias_aprovadas = db.query(models.VacationRequest).filter(
+                models.VacationRequest.user_id == user.id,
+                models.VacationRequest.status == "APROVADO"
+            ).all()
+
+            for req in ferias_aprovadas:
+                if req.start_date <= hoje <= req.end_date:
+                    em_ferias_agora = True
+                    break # Achou uma férias válida hoje, já pode parar de procurar
+
+            estado_atual_bloqueado = getattr(user, "is_entra_blocked", False)
+
+            # 2. A MÁGICA DA SINCRONIZAÇÃO
+            if em_ferias_agora and not estado_atual_bloqueado:
+                # O cara tá de férias, mas o Entra ID tá liberado. CORTA!
+                sucesso = self.update_entra_id_account(user.email, False)
+                if sucesso:
+                    user.is_entra_blocked = True
+                    db.add(models.EntraAuditLog(target_user_id=user.id, action="BLOQUEIO AUTOMÁTICO", performed_by="ROBÔ DE BLOQUEIO"))
+                    db.commit()
+                    print(f"🔒 [ROBÔ MS] {user.full_name} bloqueado (Saiu de Férias).")
+
+            elif not em_ferias_agora and estado_atual_bloqueado:
+                # O cara NÃO tá de férias, mas o Entra ID tá bloqueado. LIBERA!
+                sucesso = self.update_entra_id_account(user.email, True)
+                if sucesso:
+                    user.is_entra_blocked = False
+                    db.add(models.EntraAuditLog(target_user_id=user.id, action="DESBLOQUEIO AUTOMÁTICO", performed_by="ROBÔ DE LIBERAÇÃO"))
+                    db.commit()
+                    print(f"🔓 [ROBÔ MS] {user.full_name} liberado (Voltou das Férias).")
+
+        print("✅ [ROBÔ MS] Varredura concluída com sucesso!")
 
 # ---------------------------------------------------------
 # 2. O GUICHÊ DE ATENDIMENTO (Onde o Next.js vai bater)
