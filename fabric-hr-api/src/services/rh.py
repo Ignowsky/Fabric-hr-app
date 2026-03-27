@@ -128,7 +128,12 @@ def get_rh_metrics(db: Session = Depends(get_db)):
         valid_reqs = 0
         for req in approved:
             if hasattr(req, 'created_at') and hasattr(req, 'updated_at') and req.created_at and req.updated_at:
-                total_seconds += (req.updated_at - req.created_at).total_seconds()
+                # Tira o fuso horário (tzinfo=None) das duas variáveis pra unificar o multiverso
+                created_clean = req.created_at.replace(tzinfo=None)
+                updated_clean = req.updated_at.replace(tzinfo=None)
+
+                # Agora a subtração rola lisa!
+                total_seconds += (updated_clean - created_clean).total_seconds()
                 valid_reqs += 1
         if valid_reqs > 0:
             avg_approval_time_days = round((total_seconds / valid_reqs) / 86400, 1)
