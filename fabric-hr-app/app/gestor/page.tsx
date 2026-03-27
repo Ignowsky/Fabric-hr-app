@@ -79,35 +79,40 @@ export default function ManagerDashboard() {
       try {
         const email = session.user.email;
         
-        // 🚀 O JUTSU DO APIFETCH: Adeus "baseUrl" e "res.json()" manual!
-        const [teamData, notifData, userData] = await Promise.all([
-          apiFetch(`/vacation/team_vacations?email=${email}`), 
-          apiFetch(`/notifications?email=${email}&context=gestor`),
-          apiFetch(`/vacation/balance?email=${email}`)
-        ]);
 
-        // Alimenta os estados com os dados já mastigados pelo apiFetch
-        if (teamData) {
-          setTeamVacations(teamData.vacations || []);
-          if (teamData.metrics) setTeamMetrics((prev: any) => ({...prev, ...teamData.metrics}));
-        }
+          const [teamData, notifData, userData] = await Promise.all([
+            apiFetch(`/vacation/team_vacations?email=${email}`).catch(err => {
+              console.warn("Aviso: Falha ao buscar time", err);
+              return null;
+            }), 
+            apiFetch(`/notifications?email=${email}&context=gestor`).catch(() => []),
+            apiFetch(`/vacation/balance?email=${email}`).catch(err => {
+              console.warn("Aviso: Falha ao buscar saldo/usuário", err);
+              return null;
+            })
+          ]);
 
-        if (notifData) setNotifications(notifData);
-        if (userData) setCurrentUser(userData);
+          // Só alimenta os estados se a API devolver os dados corretos
+          if (teamData && teamData.vacations) {
+            setTeamVacations(teamData.vacations);
+            if (teamData.metrics) setTeamMetrics((prev: any) => ({...prev, ...teamData.metrics}));
+          } else {
+            setTeamVacations([]); // Previne que a tabela quebre se for nulo
+          }
 
-      } catch (err) {
-        console.error("🚨 Erro S-Rank no módulo Gestor:", err);
-        // Se der 404 ou o servidor cair, a tabela fica vazia, mas a tela não trava!
-        setTeamVacations([]);
-      } finally {
-        // 🔑 A CHAVE DA LIBERDADE: Independente de dar bom ou ruim, tira o loading!
-        setIsLoading(false);
-      }
-    };
+          if (notifData) setNotifications(notifData);
 
-  useEffect(() => {
-    fetchTeamData();
-  }, [status, session]);
+          // 🚨 Aqui é o pulo do gato: Se o userData falhar, a gente injeta um "fake" 
+          // com o e-mail da sessão só pra tela destravar e não ficar no "Carregando..."
+          if (userData) {
+            setCurrentUser(userData);
+          } else {
+            setCurrentUser({ email: email, name: "Erro ao carregar dados", role: "Gestor" });
+          }
+
+            useEffect(() => {
+              fetchTeamData();
+            }, [status, session]);
 
   // ==========================================
   // 🚀 LÓGICA DE NOTIFICAÇÕES (LEITURA E CACHE)
