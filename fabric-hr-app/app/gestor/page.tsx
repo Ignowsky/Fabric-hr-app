@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Check, X, Clock, LogOut, Users, CalendarDays, AlertTriangle, FileText, Download, Filter, MessageSquare, ChevronLeft, ChevronRight, Bell, Home, Percent, Wallet, HeartPulse, ShieldAlert, ShieldCheck } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
+import { apiFetch } from "@/services/api";
 
 export default function ManagerDashboard() {
   const { data: session, status } = useSession();
@@ -59,35 +60,50 @@ export default function ManagerDashboard() {
     }
   }, [session?.user?.email]);
 
+
   const fetchTeamData = async () => {
-    if (status !== "authenticated" || !session?.user?.email) return;
-    try {
-      const email = session.user.email;
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
-      
-      const [res, notifRes, userRes] = await Promise.all([
-        fetch(`${baseUrl}/api/vacation/team_vacations?email=${session?.user?.email}`),
-        fetch(`${baseUrl}/api/notifications?email=${email}&context=gestor`),
-        fetch(`${baseUrl}/api/vacation/balance?email=${email}`)
-      ]);
+      // 1. Se o cara não tá logado, expulsa pra Home e PARA o loading.
+      if (status === "unauthenticated") {
+        setIsLoading(false); // 🚨 Sem isso, a tela trava pra sempre!
+        router.push("/");
+        return;
+      }
 
-      if (!res.ok) throw new Error("Erro na API de Férias");
-      
-      const data = await res.json();
-      setTeamVacations(data?.vacations || []);
-      
-      if(data?.metrics) setTeamMetrics((prev: any) => ({...prev, ...data.metrics}));
+      // 2. Se a sessão ainda tá pensando, a gente só espera. 
+      // O useEffect vai rodar essa função de novo sozinho quando logar.
+      if (status !== "authenticated" || !session?.user?.email) return;
 
-      if (notifRes.ok) setNotifications(await notifRes.json());
-      if (userRes.ok) setCurrentUser(await userRes.json());
+      // 3. O usuário tá logado! Começa a busca.
+      setIsLoading(true);
 
-    } catch (err) {
-      console.error("Erro ao buscar dados do gestor:", err);
-      setTeamVacations([]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      try {
+        const email = session.user.email;
+        
+        // 🚀 O JUTSU DO APIFETCH: Adeus "baseUrl" e "res.json()" manual!
+        const [teamData, notifData, userData] = await Promise.all([
+          apiFetch(`/vacation/team_vacations?email=${email}`), 
+          apiFetch(`/notifications?email=${email}&context=gestor`),
+          apiFetch(`/vacation/balance?email=${email}`)
+        ]);
+
+        // Alimenta os estados com os dados já mastigados pelo apiFetch
+        if (teamData) {
+          setTeamVacations(teamData.vacations || []);
+          if (teamData.metrics) setTeamMetrics((prev: any) => ({...prev, ...teamData.metrics}));
+        }
+
+        if (notifData) setNotifications(notifData);
+        if (userData) setCurrentUser(userData);
+
+      } catch (err) {
+        console.error("🚨 Erro S-Rank no módulo Gestor:", err);
+        // Se der 404 ou o servidor cair, a tabela fica vazia, mas a tela não trava!
+        setTeamVacations([]);
+      } finally {
+        // 🔑 A CHAVE DA LIBERDADE: Independente de dar bom ou ruim, tira o loading!
+        setIsLoading(false);
+      }
+    };
 
   useEffect(() => {
     fetchTeamData();

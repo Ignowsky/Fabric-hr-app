@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CalendarDays, LogOut, Palmtree, Clock, FileText, Info, X, UserX, Check, AlertCircle, Lock, ShieldCheck, ServerCrash, Crown, Users, AlertTriangle, ShieldAlert } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
+import { apiFetch } from "@/services/api";
 
 const MASTER_ADMIN = process.env.NEXT_PUBLIC_MASTER_ADMIN;
 
@@ -32,59 +33,66 @@ export default function Dashboard() {
 
 
 
-const fetchData = async () => {
-  if (status === "unauthenticated") {
-    setIsLoadingData(false);
-    return;
-  }
-
-  if (status === "authenticated" && session?.user?.email) {
-    try {
-      const email = session.user.email;
-      
-      // Pega a URL da Vercel (Produção) ou do .env local (Dev)
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
-      
-      const response = await fetch(`${baseUrl}/api/vacation/balance?email=${email}`);
-      
-if (response.status === 404) {
-  if (email === MASTER_ADMIN) {
-    // Se for Admin e não estiver no banco, a gente "finge" um usuário básico 
-    // só pra ele não travar e poder navegar.
-        setUserData({
-          full_name: "Master Admin",
-          role: "ADMIN",
-          is_hr: true,
-          is_manager: true
-        });
-        setIsLoadingData(false);
-        // NÃO USE router.replace("/rh") AQUI! Deixa ele na Home.
-        return;
-      }
-        setUserData(null);
-        setIsLoadingData(false);
-        return;
-      }
-
-      if (!response.ok) throw new Error("Erro na API Python");
-
-      const balanceData = await response.json();
-      setUserData(balanceData);
-      
-      // 🚀 Segunda chamada usando a mesma Base URL
-      const hRes = await fetch(`${baseUrl}/api/vacation/history?email=${email}`);
-      if (hRes.ok) setHistory(await hRes.json());
-      
-    } catch (err: any) {
-      console.error("Erro de conexão:", err);
-      if (err.message === "Failed to fetch" || err.message.includes("NetworkError")) {
-        setIsBackendOffline(true);
-      }
-    } finally {
+  const fetchData = async () => {
+    if (status === "unauthenticated") {
       setIsLoadingData(false);
+      return;
     }
-  }
-};
+
+    if (status === "authenticated" && session?.user?.email) {
+      // Garante que o loading comece
+      setIsLoadingData(true); 
+
+      try {
+        const email = session.user.email;
+        
+        // 🚀 JUTSU S-RANK: Buscando saldo e histórico ao mesmo tempo!
+        // Se der 404 no saldo, a gente intercepta e devolve um número "404" pro código saber.
+        const [balanceData, historyData] = await Promise.all([
+          apiFetch(`/vacation/balance?email=${email}`).catch((err: any) => {
+            if (err.message.includes("404") || err.message.toLowerCase().includes("not found")) {
+              return 404; // Sinalizador de que o usuário não existe no banco
+            }
+            throw err; // Se for erro de rede/servidor caído, joga pro catch principal
+          }),
+          apiFetch(`/vacation/history?email=${email}`).catch(() => []) // Histórico falhou? Devolve vazio e segue o baile.
+        ]);
+
+        // 🥷 AVALIANDO O SINALIZADOR 404 (A armadilha do Admin)
+        if (balanceData === 404) {
+          if (email === MASTER_ADMIN) {
+            // O Admin logou pela primeira vez. Modo "God Mode" ativado!
+            setUserData({
+              full_name: "Master Admin",
+              role: "ADMIN",
+              is_hr: true,
+              is_manager: true
+            });
+            setHistory([]);
+            return; // Para a execução e deixa o Admin na Home com o menu liberado
+          } else {
+            // Usuário comum não tá no banco. Segue a sua lógica original.
+            setUserData(null);
+            return; 
+          }
+        }
+
+        // Se chegou aqui, é um usuário normal com saldo no banco!
+        setUserData(balanceData);
+        setHistory(historyData);
+        
+      } catch (err: any) {
+        console.error("🚨 Erro de conexão:", err);
+        // Se o backend estiver desligado no Render, o fetch estoura "Failed to fetch"
+        if (err.message === "Failed to fetch" || err.message.includes("NetworkError") || err.message.includes("Failed")) {
+          setIsBackendOffline(true);
+        }
+      } finally {
+        // 🔑 Destrava a tela para sempre, com sucesso ou falha
+        setIsLoadingData(false);
+      }
+    }
+  };
 
   useEffect(() => {
     fetchData();
