@@ -20,7 +20,7 @@ app = FastAPI()
 # 🚀 A Lista VIP (Onde o seu Front-end mora)
 origins = [
     "http://localhost:3000", # Mantém pro seu PC continuar funcionando
-    "https://fabric-hr-app.vercel.app/"
+    "https://fabric-hr-app.vercel.app"
 ]
 
 # Configurando o Leão de Chácara (Middleware)
@@ -51,12 +51,3 @@ def root():
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
     return Response(content=b"", media_type="image/x-icon")
-
-# ---------------------------------------------------------
-# NOVO: MOTOR DE MÉTRICAS GLOBAIS DO RH
-# ---------------------------------------------------------
-
-# ---------------------------------------------------------
-# MOTOR DE DISPARO DE E-MAILS
-# --------------------------------------------------------
-# -
