@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
@@ -12,9 +13,22 @@ from src.database import engine, get_db
 # importando os routers
 from src.services import users, vacations, rh
 # 🚨 1. IMPORTANDO O SEU NOVO ARQUIVO DE E-MAIL
-from src.routers import email 
+from src.routers import email
 
 app = FastAPI()
+
+from src.routers.scheduler import scheduler 
+
+# 🚀 3. O JUTSU DE IGNIÇÃO DA MATRIX
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    print("[ROBÔ] Iniciando a ronda do robô de segurança do ENTRA ID...")
+    scheduler.start() # Liga o robô quando a API sobe!
+    
+    yield # Aqui a API fica viva, recebendo os GET e POST da vida...
+    
+    print("[ROBÔ] Finalizando a ronda do robô de segurança do ENTRA ID..")
+    scheduler.shutdown() # Desliga limpo se o Render reiniciar a máquina
 
 # 🚀 A Lista VIP (Onde o seu Front-end mora)
 origins = [
