@@ -6,21 +6,20 @@ from pydantic import BaseModel
 from datetime import datetime, timedelta, date
 from typing import Optional
 
-
-
 from src import models
 from src.database import engine, get_db
 
 # importando os routers
 from src.services import users, vacations, rh
-
+# 🚨 1. IMPORTANDO O SEU NOVO ARQUIVO DE E-MAIL
+from src.routers import email 
 
 app = FastAPI()
 
 # 🚀 A Lista VIP (Onde o seu Front-end mora)
 origins = [
     "http://localhost:3000", # Mantém pro seu PC continuar funcionando
-    "https://fabric-hr-app.vercel.app"
+    "https://fabric-hr-app.vercel.app" # Lindo, sem a barra!
 ]
 
 # Configurando o Leão de Chácara (Middleware)
@@ -43,6 +42,10 @@ models.Base.metadata.create_all(bind=engine)
 app.include_router(users.router)
 app.include_router(vacations.router)
 app.include_router(rh.router)
+
+# 🚨 2. CONECTANDO O GUICHÊ DE E-MAIL NA API
+# Coloquei o prefixo "/api" para a URL final ficar igual a que o Front-end chama: /api/gestor/dispatch
+app.include_router(email.router, prefix="/api") 
 
 @app.get("/")
 def root():
