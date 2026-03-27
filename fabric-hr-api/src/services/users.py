@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from datetime import datetime, timedelta, date
 from fastapi.responses import StreamingResponse
 import io
@@ -51,15 +52,32 @@ def get_all_users(db: Session = Depends(get_db)):
             mgr = db.query(models.User).filter(models.User.id == u.manager_id).first()
             if mgr: manager_name = mgr.full_name
             
-        # 🚀 Executa o motor S-Rank para cada usuário
-        dias_usados = u.balance.used_days if u.balance else 0
-        periodos_erp = MathRHService.calcular_periodos_aquisitivos(u.admission_date, dias_usados)
+        # 🚀 A FONTE DA VERDADE (Cálculo Dinâmico)
+        # 1. Soma todos os dias de férias já aprovados na tabela VacationRequest
+        dias_solicitados = db.query(func.sum(models.VacationRequest.days)).filter(
+            models.VacationRequest.user_id == u.id,
+            models.VacationRequest.status == "APROVADO"
+        ).scalar() or 0
+
+        # 2. Verifica se houve venda de férias (cada venda consome 10 dias do saldo)
+        vendas = db.query(func.count(models.VacationRequest.id)).filter(
+            models.VacationRequest.user_id == u.id,
+            models.VacationRequest.status == "APROVADO",
+            models.VacationRequest.sell_days == True
+        ).scalar() or 0
+
+        dias_usados_reais = dias_solicitados + (vendas * 10)
+
+        # 🚀 Executa o motor S-Rank com o valor REAL extraído do histórico
+        periodos_erp = MathRHService.calcular_periodos_aquisitivos(u.admission_date, dias_usados_reais)
         total_disponivel = sum(p["available"] for p in periodos_erp)
 
-        # Atualiza o banco silenciosamente
-        if u.balance and u.balance.available_days != total_disponivel:
-            u.balance.available_days = total_disponivel
-            db.commit()
+        # Atualiza o banco silenciosamente para manter a tabela Balance sincronizada
+        if u.balance:
+            if u.balance.available_days != total_disponivel or u.balance.used_days != dias_usados_reais:
+                u.balance.available_days = total_disponivel
+                u.balance.used_days = dias_usados_reais
+                db.commit()
 
         resultado.append({
                 "id": u.id, 
@@ -68,7 +86,6 @@ def get_all_users(db: Session = Depends(get_db)):
                 "role": u.role, 
                 "department": u.department,
                 "admission_date": u.admission_date.strftime("%d/%m/%Y") if u.admission_date else "", 
-                # 🚀 CORREÇÃO AQUI TAMBÉM
                 "demission_date": u.demission_date.strftime("%d/%m/%Y") if getattr(u, 'demission_date', None) else "",
                 "is_active": u.is_active,
                 "is_manager": u.is_manager, 
@@ -76,7 +93,6 @@ def get_all_users(db: Session = Depends(get_db)):
                 "manager_name": manager_name,
                 "available_days": total_disponivel,
                 "vacation_periods": periodos_erp,
-                # NOVO: Status de bloqueio na nuvem (Entra ID)
                 "is_entra_blocked": getattr(u, "is_entra_blocked", False) 
             })
         
