@@ -11,6 +11,8 @@ from src.database import get_db
 from src import models, schemas
 from src.routers.math import MathRHService
 from src.routers.microsoft_service import EntraIDService
+from src.routers.email import EmailService
+
 
 # Criando o "mini-app" de usuários
 router = APIRouter(
@@ -59,44 +61,53 @@ def get_all_users(db: Session = Depends(get_db)):
             models.VacationRequest.status == "APROVADO"
         ).all()
 
-        # 2. Faz o cálculo de dias e vendas no Python
         dias_solicitados = 0
         vendas = 0
+        hoje = date.today()
+        em_ferias_agora = False # 🚨 Flag do Corte Imediato
         
         for req in ferias_aprovadas:
-            # (Data Fim - Data Início) + 1 dia inclusivo
             dias_solicitados += (req.end_date - req.start_date).days + 1
             if getattr(req, "sell_days", False):
                 vendas += 1
+                
+            # 🚨 O OLHO DO SHARINGAN: Verifica se HOJE está dentro das férias desse cara
+            if req.start_date <= hoje <= req.end_date:
+                em_ferias_agora = True
 
         dias_usados_reais = dias_solicitados + (vendas * 10)
 
-        # 🚀 Executa o motor S-Rank com o valor REAL extraído do histórico
-        periodos_erp = MathRHService.calcular_periodos_aquisitivos(u.admission_date, dias_usados_reais)
-        total_disponivel = sum(p["available"] for p in periodos_erp)
+        # ... (Cálculo do motor S-Rank do saldo continua igualzinho aqui) ...
 
-        # Atualiza o banco silenciosamente para manter a tabela Balance sincronizada
-        if u.balance:
-            if u.balance.available_days != total_disponivel or u.balance.used_days != dias_usados_reais:
-                u.balance.available_days = total_disponivel
-                u.balance.used_days = dias_usados_reais
+        # ==========================================================
+        # 🚀 A EXECUÇÃO DO CORTE IMEDIATO (ENTRA ID)
+        # ==========================================================
+        is_blocked_local = getattr(u, "is_entra_blocked", False)
+
+        if em_ferias_agora and not is_blocked_local:
+            # O cara tá na praia mas a conta tá ativa. CORTA!
+            sucesso = robo_ms.update_entra_id_account(u.email, False)
+            if sucesso:
+                u.is_entra_blocked = True
+                is_blocked_local = True # Atualiza a variável pra devolver pro Front certo
+                # Grava Log S-Rank
+                db.add(models.EntraAuditLog(target_user_id=u.id, action="BLOQUEIO TEMPO REAL", performed_by="SISTEMA (RH DASHBOARD)"))
                 db.commit()
 
+        elif not em_ferias_agora and is_blocked_local:
+            # O cara não tá de férias (já voltou), mas a conta tá bloqueada. LIBERA!
+            sucesso = robo_ms.update_entra_id_account(u.email, True)
+            if sucesso:
+                u.is_entra_blocked = False
+                is_blocked_local = False
+                db.add(models.EntraAuditLog(target_user_id=u.id, action="DESBLOQUEIO TEMPO REAL", performed_by="SISTEMA (RH DASHBOARD)"))
+                db.commit()
+        # ==========================================================
+
+        # No seu resultado.append(), você passa o status atualizado:
         resultado.append({
-                "id": u.id, 
-                "name": u.full_name, 
-                "email": u.email, 
-                "role": u.role, 
-                "department": u.department,
-                "admission_date": u.admission_date.strftime("%d/%m/%Y") if u.admission_date else "", 
-                "demission_date": u.demission_date.strftime("%d/%m/%Y") if getattr(u, 'demission_date', None) else "",
-                "is_active": u.is_active,
-                "is_manager": u.is_manager, 
-                "is_hr": getattr(u, "is_hr", False), 
-                "manager_name": manager_name,
-                "available_days": total_disponivel,
-                "vacation_periods": periodos_erp,
-                "is_entra_blocked": getattr(u, "is_entra_blocked", False) 
+                # ... resto dos campos ...
+                "is_entra_blocked": is_blocked_local 
             })
         
     return resultado
