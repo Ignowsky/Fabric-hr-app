@@ -34,61 +34,53 @@ export default function Dashboard() {
 
 
   const fetchData = async () => {
+    // 1. Se não tá logado, tira o loading e abre a tela de Login.
     if (status === "unauthenticated") {
       setIsLoadingData(false);
       return;
     }
 
-    if (status === "authenticated" && session?.user?.email) {
-      // Garante que o loading comece
-      setIsLoadingData(true); 
+    // 2. Se tá logado...
+    if (status === "authenticated") {
+      
+      // 🚨 A BLINDAGEM: Se a Microsoft logou, mas não enviou o e-mail!
+      if (!session?.user?.email) {
+        console.error("🚨 Sessão autenticada, mas o Azure AD não retornou o e-mail!");
+        setIsLoadingData(false); // Destrava a tela pra não ficar no limbo
+        return;
+      }
 
+      // Se chegou aqui, tem e-mail. Segue o baile normal!
       try {
         const email = session.user.email;
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
         
-        // 🚀 JUTSU S-RANK: Buscando saldo e histórico ao mesmo tempo!
-        // Se der 404 no saldo, a gente intercepta e devolve um número "404" pro código saber.
-        const [balanceData, historyData] = await Promise.all([
-          apiFetch(`/vacation/balance?email=${email}`).catch((err: any) => {
-            if (err.message.includes("404") || err.message.toLowerCase().includes("not found")) {
-              return 404; // Sinalizador de que o usuário não existe no banco
-            }
-            throw err; // Se for erro de rede/servidor caído, joga pro catch principal
-          }),
-          apiFetch(`/vacation/history?email=${email}`).catch(() => []) // Histórico falhou? Devolve vazio e segue o baile.
-        ]);
-
-        // 🥷 AVALIANDO O SINALIZADOR 404 (A armadilha do Admin)
-        if (balanceData === 404) {
+        const response = await fetch(`${baseUrl}/api/vacation/balance?email=${email}`);
+        
+        if (response.status === 404) {
           if (email === MASTER_ADMIN) {
-            // O Admin logou pela primeira vez. Modo "God Mode" ativado!
-            setUserData({
-              full_name: "Master Admin",
-              role: "ADMIN",
-              is_hr: true,
-              is_manager: true
-            });
-            setHistory([]);
-            return; // Para a execução e deixa o Admin na Home com o menu liberado
+            setUserData({ full_name: "Master Admin", role: "ADMIN", is_hr: true, is_manager: true });
           } else {
-            // Usuário comum não tá no banco. Segue a sua lógica original.
             setUserData(null);
-            return; 
           }
+          return;
         }
 
-        // Se chegou aqui, é um usuário normal com saldo no banco!
+        if (!response.ok) throw new Error("Erro na API Python");
+
+        const balanceData = await response.json();
         setUserData(balanceData);
-        setHistory(historyData);
+        
+        const hRes = await fetch(`${baseUrl}/api/vacation/history?email=${email}`);
+        if (hRes.ok) setHistory(await hRes.json());
         
       } catch (err: any) {
-        console.error("🚨 Erro de conexão:", err);
-        // Se o backend estiver desligado no Render, o fetch estoura "Failed to fetch"
-        if (err.message === "Failed to fetch" || err.message.includes("NetworkError") || err.message.includes("Failed")) {
+        console.error("Erro de conexão:", err);
+        if (err.message === "Failed to fetch" || err.message.includes("NetworkError")) {
           setIsBackendOffline(true);
         }
       } finally {
-        // 🔑 Destrava a tela para sempre, com sucesso ou falha
+        // 🔑 Garante que vai destravar a tela, dando bom ou ruim na API
         setIsLoadingData(false);
       }
     }
