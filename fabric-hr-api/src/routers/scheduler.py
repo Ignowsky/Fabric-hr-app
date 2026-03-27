@@ -3,8 +3,10 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from src.database import SessionLocal # Importe sua sessão do banco
 from src import models
 from src.routers.microsoft_service import EntraIDService
+from src.routers.email import EmailService
 
 entra_service = EntraIDService()
+email_service = EmailService()
 
 def robo_bloqueio_ferias_continuo():
     """
@@ -13,7 +15,7 @@ def robo_bloqueio_ferias_continuo():
     """
     db = SessionLocal()
     hoje = date.today()
-    print(f"🕵️‍♂️ [ANBU] Iniciando varredura de segurança Entra ID. Data base: {hoje}")
+    print(f"[ROBÔ] Iniciando varredura de segurança Entra ID. Data base: {hoje}")
     
     try:
         # ==========================================================
