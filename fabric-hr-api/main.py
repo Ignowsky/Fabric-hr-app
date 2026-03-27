@@ -20,8 +20,7 @@ app = FastAPI()
 # 🚀 A Lista VIP (Onde o seu Front-end mora)
 origins = [
     "http://localhost:3000", # Mantém pro seu PC continuar funcionando
-    "https://fabric-hr-app.vercel.app/",
-    "https://fabric-hr-app-git-main-seu-user.vercel.app" 
+    "https://fabric-hr-app.vercel.app/"
 ]
 
 # Configurando o Leão de Chácara (Middleware)
