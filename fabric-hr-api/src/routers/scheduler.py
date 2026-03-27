@@ -6,51 +6,52 @@ from src.routers.microsoft_service import EntraIDService
 
 entra_service = EntraIDService()
 
-def robo_bloqueio_ferias_noturno():
+def robo_bloqueio_ferias_continuo():
     """
-    Varre o banco de dados procurando férias aprovadas que começam no dia seguinte.
-    Se achar, corta o acesso na Microsoft, atualiza a sombra local e gera log de auditoria.
+    Varredura 360º S-Rank: Verifica todo mundo que está no período de férias HOJE.
+    Se o cara tá de férias e a conta ainda tá ativa no Entra ID, a gente passa o cerol.
     """
-    db = SessionLocal() # Abre uma conexão pro robô
-    amanha = date.today() + timedelta(days=1)
+    db = SessionLocal()
+    hoje = date.today()
     
     try:
-        # Busca a galera que sai de férias amanhã e a solicitação tá APROVADA
-        ferias_para_iniciar = db.query(models.VacationRequest).filter(
-            models.VacationRequest.start_date == amanha,
+        # A MÁGICA AQUI: Pega quem tem o 'hoje' caindo no meio das férias
+        # Ajuste o 'end_date' para o nome exato da coluna no seu banco
+        ferias_ativas = db.query(models.VacationRequest).filter(
+            models.VacationRequest.start_date <= hoje,
+            models.VacationRequest.end_date >= hoje,
             models.VacationRequest.status == "APROVADO"
         ).all()
 
-        for ferias in ferias_para_iniciar:
+        for ferias in ferias_ativas:
             user = ferias.user
             
-            # Se já não estiver bloqueado, a gente passa o cerol
+            # Se a sombra local acusa que ele NÃO tá bloqueado, a gente age!
             if not user.is_entra_blocked:
-                # 1. Bloqueia na Nuvem (enable=False)
-                # Acessamos o método direto da classe que você criou
+                # 1. Derruba a sessão e bloqueia na Nuvem
                 sucesso = entra_service.auth_provider.update_account_status(user.email, False)
                 
                 if sucesso:
-                    # 2. Atualiza a Sombra Local (Pra tela ficar com o badge vermelho)
+                    # 2. Atualiza a Sombra Local (Badge vermelho na tela do Gestor)
                     user.is_entra_blocked = True
                     
-                    # 3. Grava o Log S-Rank pra Auditoria
+                    # 3. Grava o Log de Auditoria Implacável
                     novo_log = models.EntraAuditLog(
                         target_user_id=user.id,
-                        action="BLOQUEIO AUTOMÁTICO",
-                        performed_by="AUTOMAÇÃO DE SEGURANÇA NOTURNA"
+                        action="BLOQUEIO AUTOMÁTICO (CORREÇÃO DE ROTA)",
+                        performed_by="AUTOMAÇÃO DE SEGURANÇA CONTÍNUA"
                     )
                     db.add(novo_log)
-                    print(f"✅ [ROBÔ] Acesso de {user.full_name} cortado para férias!")
+                    print(f"✅ [ROBÔ] Pegamos no pulo! Acesso de {user.full_name} cortado para férias (Início: {ferias.start_date}).")
 
-        db.commit() # Salva tudo no Postgres
+        db.commit() 
     except Exception as e:
-        print(f"🚨 [ROBÔ] Erro na automação noturna: {e}")
+        print(f"🚨 [ROBÔ] Erro na automação de varredura: {e}")
     finally:
-        db.close() # Nunca esqueça de fechar a porta do banco!
+        db.close() 
 
 # 🚀 INICIA O MOTOR DO ROBÔ
 scheduler = BackgroundScheduler()
-# Configura pra rodar todo dia às 23:50
-scheduler.add_job(robo_bloqueio_ferias_noturno, 'cron', hour=23, minute=50)
+# Mantém rodando no fim do dia (ou bota pra rodar de hora em hora pra ser mais agressivo)
+scheduler.add_job(robo_bloqueio_ferias_continuo, 'cron', hour=23, minute=50)
 scheduler.start()
