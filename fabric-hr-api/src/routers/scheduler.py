@@ -13,45 +13,74 @@ def robo_bloqueio_ferias_continuo():
     """
     db = SessionLocal()
     hoje = date.today()
+    print(f"🕵️‍♂️ [ANBU] Iniciando varredura de segurança Entra ID. Data base: {hoje}")
     
     try:
-        # A MÁGICA AQUI: Pega quem tem o 'hoje' caindo no meio das férias
-        # Ajuste o 'end_date' para o nome exato da coluna no seu banco
+        # ==========================================================
+        # 1. A LISTA DE QUEM DEVE FICAR FORA DA MATRIX HOJE
+        # ==========================================================
         ferias_ativas = db.query(models.VacationRequest).filter(
             models.VacationRequest.start_date <= hoje,
             models.VacationRequest.end_date >= hoje,
             models.VacationRequest.status == "APROVADO"
         ).all()
 
+        # Guarda os IDs da galera que tá na praia hoje pra checar depois
+        usuarios_em_ferias_ids = [f.user_id for f in ferias_ativas]
+
+        # 🚨 BLOQUEIA QUEM TÁ DE FÉRIAS MAS TÁ COM A CONTA ATIVA
         for ferias in ferias_ativas:
             user = ferias.user
             
-            # Se a sombra local acusa que ele NÃO tá bloqueado, a gente age!
             if not user.is_entra_blocked:
-                # 1. Derruba a sessão e bloqueia na Nuvem
+                # O cara tá na praia mas a conta tá ativa. CORTA!
                 sucesso = entra_service.auth_provider.update_account_status(user.email, False)
                 
                 if sucesso:
-                    # 2. Atualiza a Sombra Local (Badge vermelho na tela do Gestor)
                     user.is_entra_blocked = True
-                    
-                    # 3. Grava o Log de Auditoria Implacável
-                    novo_log = models.EntraAuditLog(
+                    db.add(models.EntraAuditLog(
                         target_user_id=user.id,
-                        action="BLOQUEIO AUTOMÁTICO (CORREÇÃO DE ROTA)",
-                        performed_by="AUTOMAÇÃO DE SEGURANÇA CONTÍNUA"
-                    )
-                    db.add(novo_log)
-                    print(f"✅ [ROBÔ] Pegamos no pulo! Acesso de {user.full_name} cortado para férias (Início: {ferias.start_date}).")
+                        action="BLOQUEIO AUTOMÁTICO",
+                        performed_by="ROBÔ ANBU (15 MIN)"
+                    ))
+                    print(f"🔒 [ANBU] Pegamos no pulo! Acesso de {user.full_name} cortado para férias.")
+
+        # ==========================================================
+        # 2. A LISTA DE QUEM JÁ VOLTOU E PRECISA TRABALHAR
+        # ==========================================================
+        usuarios_bloqueados = db.query(models.User).filter(
+            models.User.is_entra_blocked == True
+        ).all()
+
+        # 🚨 LIBERA QUEM TÁ BLOQUEADO MAS NÃO TÁ MAIS DE FÉRIAS
+        for user in usuarios_bloqueados:
+            if user.id not in usuarios_em_ferias_ids:
+                # Tá com badge de bloqueado, mas a data de férias já passou. LIBERA!
+                sucesso = entra_service.auth_provider.update_account_status(user.email, True)
+                
+                if sucesso:
+                    user.is_entra_blocked = False
+                    db.add(models.EntraAuditLog(
+                        target_user_id=user.id,
+                        action="DESBLOQUEIO AUTOMÁTICO",
+                        performed_by="ROBÔ ANBU (15 MIN)"
+                    ))
+                    print(f"🔓 [ANBU] Férias acabaram! Acesso de {user.full_name} liberado.")
 
         db.commit() 
+        print("✅ [ROBÔ] Varredura concluída com sucesso!")
+        
     except Exception as e:
         print(f"🚨 [ROBÔ] Erro na automação de varredura: {e}")
+        db.rollback() # Limpa a transação se der erro
     finally:
-        db.close() 
+        db.close() # Nunca esqueça de fechar a porta do banco!
 
 # 🚀 INICIA O MOTOR DO ROBÔ
 scheduler = BackgroundScheduler()
-# Mantém rodando no fim do dia (ou bota pra rodar de hora em hora pra ser mais agressivo)
-scheduler.add_job(robo_bloqueio_ferias_continuo, 'cron', hour=23, minute=50)
+
+# 🚨 TROCA DO MOTOR: De 'cron' para 'interval'
+# Agora roda religiosamente a cada 15 minutos. 
+# (Dica: Pra testar agora no Render, muda pra 'minutes=2' e olha os logs, depois volta pra 15)
+scheduler.add_job(robo_bloqueio_ferias_continuo, 'interval', minutes=5, id='patrulha_entra_id')
 scheduler.start()
