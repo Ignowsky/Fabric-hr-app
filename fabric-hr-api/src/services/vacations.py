@@ -25,42 +25,48 @@ def get_vacation_balance(email: str, db: Session = Depends(get_db)):
     if not user: 
         raise HTTPException(status_code=404, detail="Colaborador não encontrado")
 
-    # 1. PEGA A DATA ATUAL
+    # 1. CÁLCULO DINÂMICO BASEADO NA ADMISSÃO
     today = date.today()
-    admission = user.admission_date
-
-    # 2. CÁLCULO DINÂMICO DE ANOS COMPLETOS (PERÍODOS AQUISITIVOS)
-    # Calculamos quantos anos se passaram desde a admissão
-    years_of_service = today.year - admission.year - ((today.month, today.day) < (admission.month, admission.day))
+    adm = user.admission_date
     
-    # Total que ele deveria ter ganho até hoje (30 dias por ano completo)
-    total_acquired = max(0, years_of_service * 30)
+    # Calcula quantos anos completos o colaborador tem de empresa
+    years = today.year - adm.year - ((today.month, today.day) < (adm.month, adm.day))
+    total_acquired = max(0, years * 30)
 
-    # 3. TRATANDO O SALDO (BALANCE)
-    # Se o balance existir, pegamos os dias usados de lá. Se não, assumimos 0.
-    used_days = user.balance.used_days if user.balance else 0
+    # 2. TRATAMENTO SEGURO DO OBJETO BALANCE (Onde o erro acontecia)
+    # Se o registro no banco não existir, assumimos valores zerados em vez de crashar
+    used_days = 0
+    has_sold = False
+    has_13th = False
     
-    # 🚨 O CÁLCULO REAL:
+    if user.balance:
+        used_days = user.balance.used_days
+        has_sold = user.balance.has_sold_days
+        has_13th = user.balance.has_advanced_13th
+
+    # 3. RESULTADO FINAL
     available_days = total_acquired - used_days
 
-    # 4. DETERMINANDO O PERÍODO AQUISITIVO ATUAL
-    # Início: Data de admissão + anos completos
-    current_period_start = admission.replace(year=admission.year + years_of_service)
-    # Fim: Início do período + 1 ano
-    current_period_end = current_period_start.replace(year=current_period_start.year + 1)
+    # Define o período aquisitivo atual (Ex: 2025-2026)
+    try:
+        current_period_start = adm.replace(year=adm.year + years)
+    except ValueError: # Tratamento para 29 de Fevereiro em anos bissextos
+        current_period_start = adm + timedelta(days=years * 365)
+        
+    current_period_end = current_period_start + timedelta(days=365)
 
     return {
         "name": user.full_name, 
         "department": user.department,
         "is_manager": user.is_manager,
         "is_hr": getattr(user, "is_hr", False), 
-        "available_days": available_days, # Calculado na hora!
+        "available_days": available_days,
         "used_days": used_days,
         "period_start": str(current_period_start),
         "period_end": str(current_period_end),
         "flags": {
-            "has_sold_days": user.balance.has_sold_days if user.balance else False,
-            "has_advanced_13th": user.balance.has_advanced_13th if user.balance else False
+            "has_sold_days": has_sold,
+            "has_advanced_13th": has_13th
         }
     }
     
