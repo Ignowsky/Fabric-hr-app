@@ -306,7 +306,7 @@ const handleExportCSV = () => {
                     <p className="text-sm text-gray-500 p-6 text-center">Nenhuma notificação da sua equipe.</p>
                   ) : (
                     <div className="flex flex-col gap-2">
-                      {notifications.map((n, idx) => {
+                      {notifications.map((n: any, idx) => {
                         const isRead = readAlerts.includes(n.title + n.message);
                         
                         // Lógica de cores
@@ -417,7 +417,7 @@ const handleExportCSV = () => {
           pendingRequests.length === 0 ? (
             <div className="text-center p-12 bg-white rounded-3xl border border-gray-100"><Check className="mx-auto text-green-500 mb-4" size={32} /><h3 className="text-lg font-medium">Caixa limpa! Nenhuma pendência.</h3></div>
           ) : (
-            pendingRequests.map((req) => (
+            pendingRequests.map((req: any) => (
               <Card key={req.id} className="rounded-3xl border border-gray-100 shadow-sm flex flex-col md:flex-row items-center justify-between p-4 md:p-6 bg-white gap-6">
                 <div className="flex items-center gap-4 flex-1 min-w-0">
                   <div className="bg-orange-100 p-3 rounded-full shrink-0"><Clock className="text-orange-500" size={24} /></div>
@@ -497,7 +497,7 @@ const handleExportCSV = () => {
                   {filteredReports.length === 0 ? (
                     <tr><td colSpan={5} className="p-12 text-center text-gray-500">Nenhum resultado na base de dados para estes filtros.</td></tr>
                   ) : (
-                    filteredReports.map((req) => (
+                    filteredReports.map((req: any) => (
                       <tr key={req.id} className="border-b hover:bg-gray-50 transition-colors">
                         <td className="p-4 font-bold text-gray-900">{req.employeeName}<p className="text-xs text-gray-500 font-normal">{req.role}</p></td>
                         <td className="p-4 text-gray-700">{req.startDate.split('-').reverse().join('/')} a {req.endDate.split('-').reverse().join('/')}</td>

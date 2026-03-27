@@ -446,7 +446,7 @@ const filteredReports = macroVacations.filter((req: any) => {
                 <div className="p-2 overflow-y-auto custom-scrollbar flex-1">
                   {notifications.length === 0 ? <p className="text-sm text-gray-500 p-6 text-center">Nenhuma notificação no radar.</p> : (
                     <div className="flex flex-col gap-2">
-                      {notifications.map((n, idx) => {
+                      {notifications.map((n: any, idx) => {
                         const isRead = readAlerts.includes(n.title + n.message);
                         
                         const baseColor = n.type === 'danger' ? 'bg-red-50 border-red-100 text-red-800' : 
