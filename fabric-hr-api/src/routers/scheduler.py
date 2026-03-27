@@ -15,7 +15,7 @@ def robo_bloqueio_ferias_continuo():
     """
     db = SessionLocal()
     hoje = date.today()
-    print(f"🕵️‍♂️ [ROBÔ] Iniciando varredura de segurança Entra ID. Data base: {hoje}")
+    print(f"[ROBÔ] Iniciando varredura de segurança Entra ID. Data base: {hoje}")
     
     try:
         # ==========================================================
@@ -44,7 +44,7 @@ def robo_bloqueio_ferias_continuo():
                         action="BLOQUEIO AUTOMÁTICO",
                         performed_by="ROBÔ DE BLOQUEIO DE FÉRIAS"
                     ))
-                    print(f"🔒 [ANBU] Pegamos no pulo! Acesso de {user.full_name} cortado para férias.")
+                    print(f"[ROBÔ] Pegamos no pulo! Acesso de {user.full_name} cortado para férias.")
 
         # ==========================================================
         # 2. A LISTA DE QUEM JÁ VOLTOU E PRECISA TRABALHAR
@@ -66,13 +66,13 @@ def robo_bloqueio_ferias_continuo():
                         action="DESBLOQUEIO AUTOMÁTICO",
                         performed_by="ROBÔ DE LIBERAÇÃO DE FÉRIAS"
                     ))
-                    print(f"🔓 [ROBÔ] Férias acabaram! Acesso de {user.full_name} liberado.")
+                    print(f"[ROBÔ] Férias acabaram! Acesso de {user.full_name} liberado.")
 
         db.commit() 
-        print("✅ [ROBÔ] Varredura concluída com sucesso!")
+        print("[ROBÔ] Varredura concluída com sucesso!")
         
     except Exception as e:
-        print(f"🚨 [ROBÔ] Erro na automação de varredura: {e}")
+        print(f"[ROBÔ] Erro na automação de varredura: {e}")
         db.rollback() 
     finally:
         db.close()
@@ -83,7 +83,7 @@ scheduler = BackgroundScheduler()
 scheduler.add_job(
     robo_bloqueio_ferias_continuo, 
     'interval', 
-    minutes=5, 
+    minutes=1440, 
     id='patrulha_entra_id', 
     next_run_time=datetime.now() + timedelta(seconds=10)
 )
