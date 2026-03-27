@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 from src.database import SessionLocal # Importe sua sessão do banco
 from src import models
@@ -82,5 +82,5 @@ scheduler = BackgroundScheduler()
 # 🚨 TROCA DO MOTOR: De 'cron' para 'interval'
 # Agora roda religiosamente a cada 15 minutos. 
 # (Dica: Pra testar agora no Render, muda pra 'minutes=2' e olha os logs, depois volta pra 15)
-scheduler.add_job(robo_bloqueio_ferias_continuo, 'interval', minutes=5, id='patrulha_entra_id', next_run_time=date.now() + timedelta(seconds=10)) # Começa 10 segundos depois do deploy pra já pegar o pessoal que tá de férias 
+scheduler.add_job(robo_bloqueio_ferias_continuo, 'interval', minutes=5, id='patrulha_entra_id', next_run_time=datetime.now() + timedelta(seconds=10)) # Começa 10 segundos depois do deploy pra já pegar o pessoal que tá de férias 
 scheduler.start()
