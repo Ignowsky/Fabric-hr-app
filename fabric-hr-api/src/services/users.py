@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from datetime import datetime, timedelta, date
 from fastapi.responses import StreamingResponse
+from collections import defaultdict
 import io
 import csv
 
@@ -44,45 +45,59 @@ def get_all_users(db: Session = Depends(get_db)):
     calculados em tempo real pelo motor de cálculos de períodos aquisitivos)
     - is_entra_blocked: boolean (indica se a conta na nuvem do usuário está bloqueada ou não, para controle visual no frontend)
     """
-    
     users = db.query(models.User).order_by(models.User.full_name).all()
+    
+    # ==========================================================
+    # Puxando todos os dados em massa evitando requisições desnecessarias no banco de dados
+    # ==========================================================
+    
+    # 1. Puxa todos os gestores de uma vez e cria um dicionário (Hash Map) na memória
+    manager_ids = {u.manager_id for u in users if u.manager_id}
+    managers = db.query(models.User).filter(models.User.id.in_(manager_ids)).all() if manager_ids else []
+    manager_map = {m.id: m.full_name for m in managers} # Ex: {1: "Pedro", 2: "Maria"}
+
+    # 2. Puxa TODAS as férias aprovadas do banco de UMA VEZ SÓ
+    todas_ferias = db.query(models.VacationRequest).filter(
+        models.VacationRequest.status == "APROVADO"
+    ).all()
+    
+    # Agrupa as férias por user_id na memória RAM (Ultra rápido)
+    ferias_por_user = defaultdict(list)
+    for f in todas_ferias:
+        ferias_por_user[f.user_id].append(f)
+
+    # ==========================================================
+
     resultado = []
+    teve_alteracao = False # Flag para saber se precisamos salvar no banco
     
     for u in users:
-        manager_name = "Diretoria"
-        if u.manager_id:
-            mgr = db.query(models.User).filter(models.User.id == u.manager_id).first()
-            if mgr: manager_name = mgr.full_name
+        # Puxa o nome do gestor da RAM, sem tocar no banco!
+        manager_name = manager_map.get(u.manager_id, "Diretoria")
             
-        # 🚀 A FONTE DA VERDADE (Cálculo Dinâmico Corrigido)
-        # 1. Puxa todas as férias aprovadas desse colaborador
-        ferias_aprovadas = db.query(models.VacationRequest).filter(
-            models.VacationRequest.user_id == u.id,
-            models.VacationRequest.status == "APROVADO"
-        ).all()
+        # Puxa as férias do cara da RAM, sem tocar no banco!
+        ferias_aprovadas = ferias_por_user.get(u.id, [])
 
-        # 2. Faz o cálculo de dias e vendas no Python
         dias_solicitados = 0
         vendas = 0
         
         for req in ferias_aprovadas:
-            # (Data Fim - Data Início) + 1 dia inclusivo
             dias_solicitados += (req.end_date - req.start_date).days + 1
             if getattr(req, "sell_days", False):
                 vendas += 1
 
         dias_usados_reais = dias_solicitados + (vendas * 10)
 
-        # 🚀 Executa o motor S-Rank com o valor REAL extraído do histórico
+        # 🚀 Executa o motor S-Rank do Saldo (Matemática Pura, rápido demais)
         periodos_erp = MathRHService.calcular_periodos_aquisitivos(u.admission_date, dias_usados_reais)
         total_disponivel = sum(p["available"] for p in periodos_erp)
 
-        # Atualiza o banco silenciosamente para manter a tabela Balance sincronizada
+        # Atualiza a tabela Balance na memória (Não salva ainda!)
         if u.balance:
             if u.balance.available_days != total_disponivel or u.balance.used_days != dias_usados_reais:
                 u.balance.available_days = total_disponivel
                 u.balance.used_days = dias_usados_reais
-                db.commit()
+                teve_alteracao = True # 🚨 Avisa que tem mudança pendente
 
         resultado.append({
                 "id": u.id, 
@@ -100,6 +115,10 @@ def get_all_users(db: Session = Depends(get_db)):
                 "vacation_periods": periodos_erp,
                 "is_entra_blocked": getattr(u, "is_entra_blocked", False) 
             })
+        
+    # COMMIT UNICO: Se teve alteração em algum saldo, salva tudo de uma vez só no final, evitando múltiplas transações no banco e deixando o processo super leve e rápido!
+    if teve_alteracao:
+        db.commit()
         
     return resultado
 
