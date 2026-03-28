@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from datetime import datetime, date
 from typing import Dict
@@ -7,12 +7,11 @@ from src import models
 def calculate_rh_metrics(db: Session):
     """
     Motor S-Rank de Business Intelligence (BI) para o RH.
-    Varre o DW e calcula todas as métricas gerenciais.
+    Otimizado para Zero N+1 Queries e Alta Performance.
     """
-    requests = db.query(models.VacationRequest).all()
     today = date.today()
 
-    # 1. Contagens Básicas
+    # 1. Contagens Básicas (Queries super leves)
     pending_count = db.query(func.count(models.VacationRequest.id)).filter(models.VacationRequest.status == "PENDENTE").scalar() or 0
     approved_count = db.query(func.count(models.VacationRequest.id)).filter(models.VacationRequest.status == "APROVADO").scalar() or 0
     reproved_count = db.query(func.count(models.VacationRequest.id)).filter(models.VacationRequest.status == "REPROVADO").scalar() or 0
@@ -24,66 +23,60 @@ def calculate_rh_metrics(db: Session):
         models.VacationRequest.end_date >= today
     ).scalar() or 0
 
-    # 3. Tempo Médio de Aprovação
-    approved_requests = db.query(models.VacationRequest).filter(models.VacationRequest.status == "APROVADO").all()
-        
-    if not approved_requests:
-            avg_approval_time_days = 0.0
-    else:
-        total_seconds = 0
-        valid_requests = 0
+    # ==========================================================
+    # 🚀 O JUTSU DA CARGA ÚNICA (Resolve o Passo 3, 4, 5 e 6 de uma vez)
+    # Traz TODOS os pedidos E os dados do usuário na mesma query!
+    # ==========================================================
+    all_requests = db.query(models.VacationRequest).options(joinedload(models.VacationRequest.user)).all()
+
+    # 3. Tempo Médio de Aprovação & 5. Sazonalidade (Feitos no mesmo loop!)
+    total_seconds = 0
+    valid_requests = 0
+    seasonality = {f"{m:02d}": 0 for m in range(1, 13)}
+
+    for req in all_requests:
+        if req.status == "APROVADO":
+            # --- Lógica da Sazonalidade ---
+            month_key = req.start_date.strftime("%m")
+            seasonality[month_key] += 1
             
-        for req in approved_requests:
-            # Garante que as colunas de tempo existem e não são nulas
+            # --- Lógica do Tempo de Aprovação ---
             if req.created_at and req.updated_at:
-                    # Calcula a diferença exata de tempo (TimeDelta)
-                diff = req.updated_at - req.created_at
+                # Opcional: Garante que as datas não têm fuso horário para evitar aquele erro de offset
+                c_clean = req.created_at.replace(tzinfo=None)
+                u_clean = req.updated_at.replace(tzinfo=None)
+                
+                diff = u_clean - c_clean
                 total_seconds += diff.total_seconds()
                 valid_requests += 1
-            
-        if valid_requests > 0:
-            avg_seconds = total_seconds / valid_requests
-                # Transforma segundos em dias (1 dia = 86400 segundos) e arredonda pra 1 casa decimal
-            avg_approval_time_days = round(avg_seconds / 86400, 1)
-        else:
-            avg_approval_time_days = 0.0
-            
+
+    avg_approval_time_days = round((total_seconds / valid_requests) / 86400, 1) if valid_requests > 0 else 0.0
+
+    # Prepara o Chart de Sazonalidade pro Front-end
+    meses_nome = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
+    sazonalidade_chart = [{"mes": meses_nome[i], "pedidos": count} for i, count in enumerate(seasonality.values())]
+
     # 4. Média de Férias por Setor
     avg_vacation_per_sector: Dict[str, float] = {}
-    sectors = db.query(models.User.department).distinct().all()
+    sector_data = {} # Guarda os dias e a quantidade de pedidos { "TI": {"dias": 30, "pedidos": 2} }
     
-    for (sector_name,) in sectors:
-        if not sector_name: continue
-        
-        sector_requests = db.query(models.VacationRequest).join(models.User).filter(
-            models.User.department == sector_name,
-            models.VacationRequest.status == "APROVADO"
-        ).all()
+    for req in all_requests:
+        if req.status == "APROVADO" and req.user.department:
+            dept = req.user.department
+            dias = (req.end_date - req.start_date).days + 1
+            
+            if dept not in sector_data:
+                sector_data[dept] = {"dias": 0, "pedidos": 0}
+                
+            sector_data[dept]["dias"] += dias
+            sector_data[dept]["pedidos"] += 1
 
-        if not sector_requests:
-            avg_vacation_per_sector[sector_name] = 0.0
-            continue
+    for dept, data in sector_data.items():
+        avg_vacation_per_sector[dept] = round(data["dias"] / data["pedidos"], 1)
 
-        dias_totais = sum((req.end_date - req.start_date).days + 1 for req in sector_requests)
-        total_requests_sector = len(sector_requests)
-        
-        avg_vacation_per_sector[sector_name] = round(dias_totais / total_requests_sector, 1)
-
-    # 5. Sazonalidade
-    seasonality: Dict[str, int] = {f"{m:02d}": 0 for m in range(1, 13)}
-    approved_requests = db.query(models.VacationRequest).filter(models.VacationRequest.status == "APROVADO").all()
-    for req in approved_requests:
-        month_key = req.start_date.strftime("%m")
-        seasonality[month_key] += 1
-    
-    sazonalidade_chart = []
-    meses_nome = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
-    for i, month_key in enumerate(seasonality):
-        sazonalidade_chart.append({"mes": meses_nome[i], "pedidos": seasonality[month_key]})
-
-    # 6. Preparação para o Calendário Macro (Agora com TODOS os dados para filtro)
+    # 6. Preparação para o Calendário Macro
     macro_vacations = []
-    for req in requests:
+    for req in all_requests:
         if req.status != "REPROVADO": 
             days_calc = (req.end_date - req.start_date).days + 1
             macro_vacations.append({
@@ -94,8 +87,8 @@ def calculate_rh_metrics(db: Session):
                 "endDate": req.end_date.strftime("%Y-%m-%d"),
                 "days": days_calc,
                 "status": req.status,
-                "sellDays": req.sell_days,           # NOVO: Para o Filtro
-                "advance13th": req.advance_13th,     # NOVO: Para o Filtro
+                "sellDays": req.sell_days,
+                "advance13th": getattr(req, "advance_13th", False), # Usando getattr por segurança
                 "justification": req.manager_justification,
                 "title": f"{req.user.full_name}: {days_calc}d ({req.user.department})"
             })
