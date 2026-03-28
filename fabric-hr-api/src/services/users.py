@@ -258,7 +258,7 @@ def export_entra_audit_csv(db: Session = Depends(get_db)):
     # 1. Busca os logs fazendo um JOIN com a tabela de Users pra pegar nome e email
     logs = db.query(models.EntraAuditLog, models.User).join(
         models.User, models.EntraAuditLog.target_user_id == models.User.id
-    ).order_by(models.EntraAuditLog.created_at.desc()).all()
+    ).order_by(models.EntraAuditLog.timestamp.desc()).all()
 
     # 2. Prepara a memória RAM pra montar o CSV
     output = io.StringIO()
@@ -271,7 +271,7 @@ def export_entra_audit_csv(db: Session = Depends(get_db)):
     # 4. Popula as linhas
     for log, user in logs:
         # Formata a data pro padrão brazuca (DD/MM/YYYY HH:MM:SS)
-        data_formatada = log.created_at.strftime("%d/%m/%Y %H:%M:%S") if log.created_at else ""
+        data_formatada = log.timestamp.strftime("%d/%m/%Y %H:%M:%S") if log.timestamp else ""
         
         writer.writerow([
             log.id,
