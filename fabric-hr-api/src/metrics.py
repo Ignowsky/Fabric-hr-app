@@ -24,7 +24,7 @@ def calculate_rh_metrics(db: Session):
     ).scalar() or 0
 
     # ==========================================================
-    # 🚀 O JUTSU DA CARGA ÚNICA (Resolve o Passo 3, 4, 5 e 6 de uma vez)
+    # ARGA ÚNICA (Resolve o Passo 3, 4, 5 e 6 de uma vez)
     # Traz TODOS os pedidos E os dados do usuário na mesma query!
     # ==========================================================
     all_requests = db.query(models.VacationRequest).options(joinedload(models.VacationRequest.user)).all()

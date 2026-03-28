@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from datetime import datetime, timedelta, date
 from fastapi.responses import StreamingResponse
@@ -45,7 +45,9 @@ def get_all_users(db: Session = Depends(get_db)):
     calculados em tempo real pelo motor de cálculos de períodos aquisitivos)
     - is_entra_blocked: boolean (indica se a conta na nuvem do usuário está bloqueada ou não, para controle visual no frontend)
     """
-    users = db.query(models.User).order_by(models.User.full_name).all()
+    users = db.query(models.User).options(
+        joinedload(models.User.balance)
+        ).order_by(models.User.full_name).all()
     
     # ==========================================================
     # Puxando todos os dados em massa evitando requisições desnecessarias no banco de dados
