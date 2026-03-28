@@ -128,8 +128,21 @@ def create_vacation_request(payload: schemas.VacationSubmit, db: Session = Depen
         sell_days=payload.sellDays, advance_13th=payload.advance13th, status="PENDENTE"
     )
     db.add(new_request)
-    if payload.sellDays: user.balance.has_sold_days = True
-    if payload.advance13th: user.balance.has_advanced_13th = True
+# Se o colaborador não tem registro de saldo, é criado no momento da solicitação para garantir que o processo de aprovação tenha a estrutura necessária para atualizar as flags de venda e adiantamento, mesmo que o RH ainda não tenha configurado o saldo do colaborador.
+    if not user.balance:
+        novo_saldo = models.VacationBalance(
+            user_id=user.id, 
+            available_days=0, # O nosso Motor de BI já recalcula isso na tela depois
+            used_days=0
+        )
+        db.add(novo_saldo)
+        db.flush() # Atualiza a sessão silenciosamente para o Python reconhecer o 'user.balance'
+
+    # Agora sim, com a carteira garantida, a gente atualiza as flags em segurança:
+    if payload.sellDays and user.balance: 
+        user.balance.has_sold_days = True
+    if payload.advance13th and user.balance: 
+        user.balance.has_advanced_13th = True
     db.commit()
     return {"message": "Solicitação gravada!"}
 
