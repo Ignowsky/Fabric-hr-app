@@ -1,20 +1,26 @@
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, contains_eager
 from sqlalchemy import func
 from datetime import datetime, date
 from typing import Dict
 from src import models
+from fastapi import Header
 
-def calculate_rh_metrics(db: Session):
+def calculate_rh_metrics(db: Session, x_company_id: int = Header(...)):
     """
     Motor S-Rank de Business Intelligence (BI) para o RH.
     Otimizado para Zero N+1 Queries e Alta Performance.
     """
     today = date.today()
+    
+    base_query = db.query(models.VacationRequest).join(models.User).filter(
+        models.User.companies.any(models.Company.id == x_company_id)
+    )
 
     # 1. Contagens Básicas (Queries super leves)
-    pending_count = db.query(func.count(models.VacationRequest.id)).filter(models.VacationRequest.status == "PENDENTE").scalar() or 0
-    approved_count = db.query(func.count(models.VacationRequest.id)).filter(models.VacationRequest.status == "APROVADO").scalar() or 0
-    reproved_count = db.query(func.count(models.VacationRequest.id)).filter(models.VacationRequest.status == "REPROVADO").scalar() or 0
+    pending_count = base_query.filter(models.VacationRequest.status == "PENDENTE").count()
+    approved_count = base_query.filter(models.VacationRequest.status == "APROVADO").count()
+    reproved_count = base_query.filter(models.VacationRequest.status == "REPROVADO").count()
+    
     
     # 2. Pessoas de Férias Agora
     people_on_vacation = db.query(func.count(models.User.id)).join(models.VacationRequest).filter(
@@ -27,7 +33,7 @@ def calculate_rh_metrics(db: Session):
     # ARGA ÚNICA (Resolve o Passo 3, 4, 5 e 6 de uma vez)
     # Traz TODOS os pedidos E os dados do usuário na mesma query!
     # ==========================================================
-    all_requests = db.query(models.VacationRequest).options(joinedload(models.VacationRequest.user)).all()
+    all_requests = base_query.options(contains_eager(models.VacationRequest.user)).all()
 
     # 3. Tempo Médio de Aprovação & 5. Sazonalidade (Feitos no mesmo loop!)
     total_seconds = 0

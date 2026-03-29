@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from datetime import datetime, timedelta, date
@@ -24,7 +24,7 @@ router = APIRouter(
 entra_service = EntraIDService()
 
 @router.get("")
-def get_all_users(db: Session = Depends(get_db)):
+def get_all_users(x_company_id: int = Header(...), db: Session = Depends(get_db)):
     """
     Endpoint para obter a lista de todos os usuários, incluindo seus saldos de férias atualizados em tempo real pelo motor de cálculo de períodos aquisitivos. 
     O endpoint retorna as seguintes informações para cada usuário:
@@ -47,8 +47,10 @@ def get_all_users(db: Session = Depends(get_db)):
     """
     users = db.query(models.User).options(
         joinedload(models.User.balance)
-        ).order_by(models.User.full_name).all()
-    
+    ).filter(
+        # 🚨 Troca o .any() curto por esse explícito:
+        models.User.companies.any(models.Company.id == x_company_id)
+    ).order_by(models.User.full_name).all()
     # ==========================================================
     # Puxando todos os dados em massa evitando requisições desnecessarias no banco de dados
     # ==========================================================
@@ -310,3 +312,29 @@ def export_entra_audit_csv(db: Session = Depends(get_db)):
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=auditoria_entra_id.csv"}
     )
+    
+# 🚀 Rota pro Front-end montar o Dropdown bonitão (users.py)
+@router.get("/{user_id}/my-companies")
+def listar_minhas_empresas(user_id: int, db: Session = Depends(get_db)):
+    """
+    Endpoint para listar as empresas associadas a um usuário específico, destacando qual é a empresa primária. O endpoint retorna uma lista de empresas com as seguintes informações:
+- id: int
+- name: string
+- is_primary: boolean (indica se é a empresa primária do usuário)
+O endpoint é utilizado para popular o Dropdown de seleção de empresa no frontend, permitindo que o usuário escolha em qual empresa deseja operar. Apenas empresas ativas (não seladas) são retornadas.
+    """
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado!")
+
+    resultado = []
+    for company in user.companies:
+        # Só mostra a empresa no Dropdown se ela não tiver sido "selada/desativada"
+        if company.is_active:
+            resultado.append({
+                "id": company.id,
+                "name": company.name,
+                "is_primary": company.id == user.primary_company_id
+            })
+            
+    return {"allowed_companies": resultado, "primary_id": user.primary_company_id}

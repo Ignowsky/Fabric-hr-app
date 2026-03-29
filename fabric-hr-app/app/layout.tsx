@@ -2,12 +2,12 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import AuthProvider from "@/providers/AuthProvider"; // <-- Importe aqui
+import AuthProvider from "@/providers/AuthProvider"; 
+import { CompanyProvider } from "@/providers/CompanyContext"; // 🚀 O Cérebro Invisível entra aqui
 
 const inter = Inter({ 
   subsets: ['latin'],
   display: 'swap',
-  // 🚀 ADICIONE ESTA LINHA:
   adjustFontFallback: false, 
 })
 
@@ -26,7 +26,10 @@ export default function RootLayout({
       <body className={inter.className}>
         {/* O Escudo ativado em todas as páginas */}
         <AuthProvider>
-          {children}
+          {/* 🚀 O Cérebro do Multi-Tenancy envelopando a rapaziada */}
+          <CompanyProvider>
+            {children}
+          </CompanyProvider>
         </AuthProvider>
       </body>
     </html>

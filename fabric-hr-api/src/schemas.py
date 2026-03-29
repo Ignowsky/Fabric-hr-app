@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 
 # ---------------------------------------------------------
 # SCHEMAS (CONTRATOS DE DADOS)
@@ -49,3 +49,14 @@ class EntraToggleRequest(BaseModel):
 class DispatchPayload(BaseModel):
     email: str
     csv_data: str
+    
+class CompanyCreate(BaseModel):
+    name: str
+    cnpj: Optional[str] = None
+
+class CompanyStatusUpdate(BaseModel):
+    is_active: bool
+    
+class UserCompanyLink(BaseModel):
+    company_ids: List[int]
+    primary_company_id: int

@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, BarChart3, LogOut, Plus, Pencil, Ban, CheckCircle, X, ShieldCheck, Crown, Bell, Home, ChevronLeft, ChevronRight, FileText, Download, Filter, ShieldAlert, Percent, Wallet, HeartPulse, CalendarDays, Clock, Check, MessageSquare, CloudOff, Cloud, Search, Lock} from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 import { apiFetch } from "@/services/api";
+import { CompanySelector } from "@/components/ui/CompanySelector";
 
 
 export default function RHDashboard() {
@@ -425,15 +426,19 @@ const filteredReports = macroVacations.filter((req: any) => {
   return (
     <main className="min-h-screen bg-[#FBFBFD] p-4 md:p-8">
       <header className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4 mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">FabricHR</h1>
-          <p className="text-sm font-medium text-purple-600 tracking-wide uppercase mt-1">Módulo Administração (RH)</p>
-        </div>
-        <div className="flex items-center gap-4">
-          
-          <div className="relative">
-            <Button variant="outline" size="icon" onClick={() => setShowNotifications(!showNotifications)} className="relative border-gray-200">
-              <Bell size={18} className="text-gray-600" />
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">FabricHR</h1>
+                <p className="text-sm font-medium text-purple-600 tracking-wide uppercase mt-1">Módulo Administração (RH)</p>
+              </div>
+              
+              <div className="flex items-center gap-4">
+                
+                {/* 🚀 O JUTSU VISUAL: Entra aqui, antes do sininho! */}
+                {currentUser?.id && <CompanySelector userId={currentUser.id} />}
+
+                <div className="relative">
+                  <Button variant="outline" size="icon" onClick={() => setShowNotifications(!showNotifications)} className="relative border-gray-200">
+                    <Bell size={18} className="text-gray-600" />
               {unreadCount > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">{unreadCount}</span>}
             </Button>
 

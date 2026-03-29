@@ -1,7 +1,38 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, Date, DateTime, Text
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, Date, DateTime, Text, Table
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from src.database import Base
+
+
+# ==========================================================
+# Tabela de Associação: Usuários <-> Empresas (Muitos-para-Muitos)
+# ==========================================================
+user_company_access = Table(
+    'user_company_access',
+    Base.metadata,
+    # 🚨 CORREÇÃO 1: Apontando para o schema 'vacation' explicitamente
+    Column('user_id', Integer, ForeignKey('vacation.users.id', ondelete="CASCADE"), primary_key=True),
+    Column('company_id', Integer, ForeignKey('vacation.companies.id', ondelete="CASCADE"), primary_key=True),
+    schema='vacation' # 🚨 CORREÇÃO 2: Tabela ponte mora no schema vacation
+)
+
+# ==========================================================
+# Tabela de Empresas e Usuários
+# ==========================================================
+class Company(Base):
+    __tablename__ = "companies"
+    __table_args__ = {'schema': 'vacation'} # 🚨 CORREÇÃO 3: Empresa mora no schema vacation
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False) # Ex: "DP Gestão Matriz"
+    cnpj = Column(String, unique=True, index=True, nullable=True)
+    is_active = Column(Boolean, default=True)
+    
+    # Opcional: Pra deixar o front-end bonitão depois
+    logo_url = Column(String, nullable=True) 
+    
+    # Relacionamento Inverso: Quem são os peões/gestores dessa empresa?
+    users = relationship("User", secondary=user_company_access, back_populates="companies")
 
 class User(Base):
     __tablename__ = "users"
@@ -12,9 +43,7 @@ class User(Base):
     email = Column(String(150), unique=True, nullable=False)
     role = Column(String(50), nullable=False)
     
-    # NOVO: A CHAVE MESTRA DO RH
     department = Column(String(100), default='Geral')
-    
     manager_id = Column(Integer, ForeignKey("vacation.users.id"), nullable=True)
     admission_date = Column(Date, nullable=False)
     demission_date = Column(Date, nullable=True)
@@ -24,10 +53,15 @@ class User(Base):
     created_at = Column(DateTime, server_default=func.now())
 
     balance = relationship("VacationBalance", back_populates="user", uselist=False)
-    requests = relationship("VacationRequest", back_populates="user") # Aqui chama "requests"
+    requests = relationship("VacationRequest", back_populates="user")
     
-    is_entra_blocked = Column(Boolean, default=False)  # NOVO: Status da conta Entra ID
+    is_entra_blocked = Column(Boolean, default=False)
 
+    # Nova coluna de relacionamento
+    companies = relationship("Company", secondary=user_company_access, back_populates="users")
+    
+    # 🚨 CORREÇÃO 4: Apontando para vacation.companies.id
+    primary_company_id = Column(Integer, ForeignKey("vacation.companies.id"), nullable=True)
 
 class VacationBalance(Base):
     __tablename__ = "vacation_balances"

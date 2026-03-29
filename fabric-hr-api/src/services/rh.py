@@ -171,3 +171,123 @@ def dispatch_vacations(payload: schemas.DispatchRequest, db: Session = Depends(g
         return {"message": "Lote disparado! E-mail com CSV enviado ao DP."}
     else:
         raise HTTPException(status_code=500, detail="Falha no disparo via Graph API.")
+    
+@router.post("/companies")
+def criar_nova_empresa(payload: schemas.CompanyCreate, db: Session = Depends(get_db)):
+    """
+    Endpoint para criar uma nova empresa. O RH pode usar para registar novas empresas e separar as bases de dados. O CNPJ é opcional, mas se fornecido, o sistema checa por duplicidade
+    para mitigar conflitos. O endpoint retorna uma mensagem de sucesso e o ID da nova empresa criada.
+    O objetivo é permitir que o RH gerencie múltiplas empresas dentro do mesmo sistema, facilitando a organização e segmentação dos dados de funcionários, férias e métricas por empresa.
+    Payload: {
+    "name": "Nome da Empresa",
+    "cnpj": "CNPJ da Empresa (opcional)"
+    }
+    DB: {
+    Company {
+        id: int (PK)
+        name: str
+        cnpj: str (nullable)
+        is_active: bool
+    }
+    """
+    # Checa se o CNPJ já existe pra não dar BO
+    if payload.cnpj:
+        empresa_existente = db.query(models.Company).filter(models.Company.cnpj == payload.cnpj).first()
+        if empresa_existente:
+            raise HTTPException(status_code=400, detail="Já existe uma empresa com esse CNPJ!")
+
+    # Forja a nova empresa no banco
+    nova_empresa = models.Company(
+        name=payload.name,
+        cnpj=payload.cnpj,
+        is_active=True
+    )
+    
+    db.add(nova_empresa)
+    db.commit()
+    db.refresh(nova_empresa) # Atualiza pra pegar o ID que o banco gerou
+    
+    return {
+        "message": f"A empresa {nova_empresa.name} foi fundada com sucesso, partner!", 
+        "company_id": nova_empresa.id
+    }
+
+# Atualização do status da empresa (Ativa/Inativa)
+@router.patch("/companies/{company_id}/status")
+def alterar_status_empresa(company_id: int, payload: schemas.CompanyStatusUpdate, db: Session = Depends(get_db)):
+    """
+    Endpoint para ativar ou desativar uma empresa. O RH pode usar para controlar quais empresas estão ativas no sistema, o que afeta a visibilidade e acesso dos colaboradores vinculados a essas empresas.
+    O endpoint recebe o ID da empresa e um payload indicando se a empresa deve ser ativada ou desativada. Ele retorna uma mensagem de sucesso indicando o novo status da empresa.
+    Payload: {
+    "is_active": true (para ativar) ou false (para desativar)
+    }
+    DB: {
+    Company {
+        id: int (PK)
+        name: str
+        cnpj: str (nullable)
+        is_active: bool
+    }
+    """
+    # 1. Rastreia a empresa no banco
+    empresa = db.query(models.Company).filter(models.Company.id == company_id).first()
+    
+    if not empresa:
+        raise HTTPException(status_code=404, detail="Empresa não encontrada no radar, partner!")
+        
+    # 2. Vira a chave do cofre
+    empresa.is_active = payload.is_active
+    db.commit()
+    
+    # 3. Dá o papo do resultado
+    status_msg = "reativada para o jogo" if payload.is_active else "desativada (selada)"
+    return {"message": f"A empresa {empresa.name} foi {status_msg} com sucesso!"}
+
+@router.post("/users/{user_id}/companies")
+def vincular_empresas_ao_usuario(user_id: int, payload: schemas.UserCompanyLink, db: Session = Depends(get_db)):
+    """
+    Endpoint para vincular um usuário a múltiplas empresas. O RH pode usar para gerenciar os acessos dos colaboradores, permitindo que eles sejam associados a uma ou mais empresas ativas no sistema.
+    O endpoint recebe o ID do usuário e um payload contendo uma lista de IDs de empresas às quais o usuário deve ser vinculado. Ele verifica a existência do usuário e das empresas, atualiza os vínculos no banco de dados e retorna uma mensagem de sucesso.
+    Payload: {
+    "company_ids": [1, 2, 3] (Lista de IDs de empresas para vincular ao usuário)
+    }
+    DB: {
+    User {
+        id: int (PK)
+        full_name: str
+        email: str
+        role: str
+        department: str
+        admission_date: date
+        is_manager: bool
+        is_hr: bool
+        manager_id: int (FK para User.id)
+        primary_company_id: int (FK para Company.id)
+    }
+    Company {
+        id: int (PK)
+        name: str
+        cnpj: str (nullable)
+        is_active: bool
+    }
+    UserCompanyLink {
+        user_id: int (FK para User.id)
+        company_id: int (FK para Company.id)
+    }
+    """
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Colaborador não encontrado, partner!")
+
+    # Busca as empresas que o RH mandou no payload
+    empresas = db.query(models.Company).filter(models.Company.id.in_(payload.company_ids)).all()
+    
+    if len(empresas) != len(payload.company_ids):
+        raise HTTPException(status_code=400, detail="Alguma empresa dessa lista não existe no banco!")
+
+    # A MÁGICA DO SQLALCHEMY: Ele limpa os acessos velhos e insere os novos sozinho!
+    user.companies = empresas 
+    user.primary_company_id = payload.primary_company_id
+    
+    db.commit()
+    return {"message": f"Acessos do {user.full_name} atualizados com sucesso!"}

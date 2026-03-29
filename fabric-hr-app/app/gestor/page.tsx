@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Check, X, Clock, LogOut, Users, CalendarDays, AlertTriangle, FileText, Download, Filter, MessageSquare, ChevronLeft, ChevronRight, Bell, Home, Percent, Wallet, HeartPulse, ShieldAlert, ShieldCheck } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 import { apiFetch } from "@/services/api";
+import { CompanySelector } from "@/components/ui/CompanySelector";
 
 export default function ManagerDashboard() {
   const { data: session, status } = useSession();
@@ -281,14 +282,16 @@ const handleExportCSV = () => {
   }
   return (
     <main className="min-h-screen bg-[#FBFBFD] p-4 md:p-8 relative">
-      {/* CABEÇALHO S-RANK UNIFICADO */}
-      <header className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4 mb-8">
-        <div><h1 className="text-2xl font-bold text-[#1D1D1F]">Portal do Gestor</h1><p className="text-sm text-gray-500">Gestão e Analytics da Equipe</p></div>
-        <div className="flex items-center gap-4">
-          
-          <div className="relative">
-            <Button variant="outline" size="icon" onClick={() => setShowNotifications(!showNotifications)} className="relative border-gray-200">
-              <Bell size={18} className="text-gray-600" />
+            <header className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4 mb-8">
+              <div><h1 className="text-2xl font-bold text-[#1D1D1F]">Portal do Gestor</h1><p className="text-sm text-gray-500">Gestão e Analytics da Equipe</p></div>
+              
+              <div className="flex items-center gap-4">
+
+                {currentUser?.id && <CompanySelector userId={currentUser.id} />}
+
+                <div className="relative">
+                  <Button variant="outline" size="icon" onClick={() => setShowNotifications(!showNotifications)} className="relative border-gray-200">
+                    <Bell size={18} className="text-gray-600" />
               {/* O contador agora puxa o unreadCount dinâmico */}
               {unreadCount > 0 && (
                 <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
