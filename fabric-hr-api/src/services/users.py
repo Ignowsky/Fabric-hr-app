@@ -22,17 +22,18 @@ router = APIRouter(
 )
 
 entra_service = EntraIDService()
-# 🚀 Rota pro Front-end montar o Dropdown bonitão (users.py)
-@router.get("/{user_id}/my-companies")
-def listar_minhas_empresas(user_id: int, db: Session = Depends(get_db)):
+
+
+# 🚨 TIREI O {user_id} DA URL! Agora a rota é fixa!
+@router.get("/my-companies")
+def listar_minhas_empresas(email: str, db: Session = Depends(get_db)): # 🚨 Troquei user_id por email
     """
-    Endpoint para listar as empresas associadas a um usuário específico, destacando qual é a empresa primária. O endpoint retorna uma lista de empresas com as seguintes informações:
-- id: int
-- name: string
-- is_primary: boolean (indica se é a empresa primária do usuário)
-O endpoint é utilizado para popular o Dropdown de seleção de empresa no frontend, permitindo que o usuário escolha em qual empresa deseja operar. Apenas empresas ativas (não seladas) são retornadas.
+    Endpoint para listar as empresas associadas a um usuário específico.
+    Apenas empresas ativas (não seladas) são retornadas.
     """
-    user = db.query(models.User).filter(models.User.id == user_id).first()
+    # 🚨 Atualizei o filtro pra buscar pelo E-MAIL!
+    user = db.query(models.User).filter(models.User.email == email).first()
+    
     if not user:
         raise HTTPException(status_code=404, detail="Usuário não encontrado!")
 
