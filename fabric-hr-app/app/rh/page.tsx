@@ -9,11 +9,12 @@ import { Users, BarChart3, LogOut, Plus, Pencil, Ban, CheckCircle, X, ShieldChec
 import toast, { Toaster } from "react-hot-toast";
 import { apiFetch } from "@/services/api";
 import { CompanySelector } from "@/components/ui/CompanySelector";
-
+import { useCompany } from "@/providers/CompanyContext";
 
 export default function RHDashboard() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const { activeCompanyId } = useCompany();
 
   const [activeTab, setActiveTab] = useState<"pendentes" | "colaboradores" | "dashboard" | "relatorios">("pendentes");
   const [users, setUsers] = useState<any[]>([]);
@@ -102,9 +103,13 @@ export default function RHDashboard() {
     };
 
   useEffect(() => {
-    if (status === "unauthenticated") router.push("/");
-    if (status === "authenticated") fetchData();
-  }, [status, router, session]);
+      if (status === "unauthenticated") router.
+      push("/");
+      
+      if (status === "authenticated" && activeCompanyId) {
+          fetchData(); 
+      }
+    }, [status, router, session, activeCompanyId]); // Adiciona o activeCompanyId nas dependências
 
   const currentUser = users.find(u => u.email === session?.user?.email);
 
@@ -433,8 +438,7 @@ const filteredReports = macroVacations.filter((req: any) => {
               
               <div className="flex items-center gap-4">
                 
-                {/* 🚀 O JUTSU VISUAL: Entra aqui, antes do sininho! */}
-                {currentUser?.id && <CompanySelector userId={currentUser.id} />}
+                {session?.user?.email && <CompanySelector userEmail={session.user.email} />} // Atualização: O seletor de empresa agora é renderizado apenas quando temos o email do usuário, garantindo que ele funcione corretamente com o contexto multi-tenant.
 
                 <div className="relative">
                   <Button variant="outline" size="icon" onClick={() => setShowNotifications(!showNotifications)} className="relative border-gray-200">

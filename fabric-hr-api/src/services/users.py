@@ -329,7 +329,6 @@ O endpoint é utilizado para popular o Dropdown de seleção de empresa no front
 
     resultado = []
     for company in user.companies:
-        # Só mostra a empresa no Dropdown se ela não tiver sido "selada/desativada"
         if company.is_active:
             resultado.append({
                 "id": company.id,

@@ -9,6 +9,7 @@ import { Check, X, Clock, LogOut, Users, CalendarDays, AlertTriangle, FileText, 
 import toast, { Toaster } from "react-hot-toast";
 import { apiFetch } from "@/services/api";
 import { CompanySelector } from "@/components/ui/CompanySelector";
+import { useCompany } from "@/providers/CompanyContext";
 
 export default function ManagerDashboard() {
   const { data: session, status } = useSession();
@@ -22,6 +23,7 @@ export default function ManagerDashboard() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState(new Date()); 
+  const { activeCompanyId} = useCompany();
   
   const [activeTab, setActiveTab] = useState<"pendentes" | "equipe" | "relatorios">("pendentes");
 
@@ -47,12 +49,20 @@ export default function ManagerDashboard() {
   //  ESTADO DO CACHE DE NOTIFICAÇÕES LIDAS
   const [readAlerts, setReadAlerts] = useState<string[]>([]);
 
-  useEffect(() => {
+useEffect(() => {
+    // 1. Se não tá logado, chuta pra Home
     if (status === "unauthenticated") {
-      router.push("/"); // Chuta o cara pro Login
+      setIsLoading(false);
+      router.push("/");
+      return;
     }
-  }, [status, router]);
 
+    // 🚨 2. TRAVA S-RANK: Só busca na API se o cara tá logado, 
+    // tem e-mail E o Contexto já descobriu qual é a empresa dele!
+    if (status === "authenticated" && session?.user?.email && activeCompanyId) {
+      fetchTeamData();
+    }
+  }, [status, router, session, activeCompanyId]); // Coloca o activeCompanyId aqui na lista
   //  NOVO: RECUPERAR CACHE DO LOCALSTORAGE
   useEffect(() => {
     if (session?.user?.email) {
@@ -282,16 +292,21 @@ const handleExportCSV = () => {
   }
   return (
     <main className="min-h-screen bg-[#FBFBFD] p-4 md:p-8 relative">
-            <header className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4 mb-8">
-              <div><h1 className="text-2xl font-bold text-[#1D1D1F]">Portal do Gestor</h1><p className="text-sm text-gray-500">Gestão e Analytics da Equipe</p></div>
+
+          <header className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4 mb-8">
+            <div>
+              <h1 className="text-2xl font-bold text-[#1D1D1F]">Portal do Gestor</h1>
+              <p className="text-sm text-gray-500">Gestão e Analytics da Equipe</p>
+            </div>
+            
+            <div className="flex items-center gap-4">
               
-              <div className="flex items-center gap-4">
+              {/* 🚀 Renderiza livre de deadlock usando o e-mail do NextAuth */}
+              {session?.user?.email && <CompanySelector userEmail={session.user.email} />}
 
-                {currentUser?.id && <CompanySelector userId={currentUser.id} />}
-
-                <div className="relative">
-                  <Button variant="outline" size="icon" onClick={() => setShowNotifications(!showNotifications)} className="relative border-gray-200">
-                    <Bell size={18} className="text-gray-600" />
+              <div className="relative">
+                <Button variant="outline" size="icon" onClick={() => setShowNotifications(!showNotifications)} className="relative border-gray-200">
+                  <Bell size={18} className="text-gray-600" />
               {/* O contador agora puxa o unreadCount dinâmico */}
               {unreadCount > 0 && (
                 <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
