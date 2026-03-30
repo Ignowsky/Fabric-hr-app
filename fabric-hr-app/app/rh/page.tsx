@@ -426,25 +426,43 @@ const filteredReports = macroVacations.filter((req: any) => {
     });
   };
 
-  if (status === "loading" || !metrics) return <div className="flex h-screen items-center justify-center"><p className="animate-pulse">Carregando Módulo RH...</p></div>;
+// Renderiza o CompanySelector de forma oculta durante o loading.
+  // Isso garante que ele monte, busque a empresa e libere o fetchData da API.
+  if (status === "loading" || !metrics) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-[#FBFBFD]">
+        <div className="hidden">
+          {session?.user?.email && <CompanySelector userEmail={session.user.email} />}
+        </div>
+        <p className="animate-pulse">Carregando Módulo RH...</p>
+      </div>
+    );
+  }
 
-  return (
-    <main className="min-h-screen bg-[#FBFBFD] p-4 md:p-8">
-      <header className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4 mb-8">
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">FabricHR</h1>
-                <p className="text-sm font-medium text-purple-600 tracking-wide uppercase mt-1">Módulo Administração (RH)</p>
-              </div>
-              
-              <div className="flex items-center gap-4">
-                
-                {session?.user?.email && <CompanySelector userEmail={session.user.email} />} // Atualização: O seletor de empresa agora é renderizado apenas quando temos o email do usuário, garantindo que ele funcione corretamente com o contexto multi-tenant.
+    return (
+      <main className="min-h-screen bg-[#FBFBFD] p-4 md:p-8">
+        <header className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4 mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">FabricHR</h1>
+            <p className="text-sm font-medium text-purple-600 tracking-wide uppercase mt-1">
+              Módulo Administração (RH)
+            </p>
+          </div>
+          
+          <div className="flex items-center gap-4">
+            
+            {/* Seletor visível após o carregamento */}
+            {session?.user?.email && <CompanySelector userEmail={session.user.email} />}
 
-                <div className="relative">
-                  <Button variant="outline" size="icon" onClick={() => setShowNotifications(!showNotifications)} className="relative border-gray-200">
-                    <Bell size={18} className="text-gray-600" />
-              {unreadCount > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">{unreadCount}</span>}
-            </Button>
+            <div className="relative">
+              <Button variant="outline" size="icon" onClick={() => setShowNotifications(!showNotifications)} className="relative border-gray-200">
+                <Bell size={18} className="text-gray-600" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                    {unreadCount}
+                  </span>
+                )}
+              </Button>
 
             {showNotifications && (
               <div className="absolute right-0 mt-2 w-80 bg-white border border-gray-100 rounded-3xl shadow-xl z-50 max-h-[400px] flex flex-col overflow-hidden">
